@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% from '_macros.html' import page_header, empty_state %}
+
+{% block title %}Ingredient Inventory - Meal Planner{% endblock %}
+
+{% block content %}
+{% call page_header('Ingredient Inventory') %}
+    {% if available|length > 0 %}
+    <a href="{{ url_for('add_meal', week_start=week_start_date.isoformat(), tab='pantry') }}" class="btn btn-primary">Recipe from pantry</a>
+    {% endif %}
+    <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">← Back to Plan</a>
+{% endcall %}
+
+<div class="inventory-summary">
+    <div class="summary-card">
+        <h3 class="app-section-title">Summary</h3>
+        <div class="summary-stats">
+            <div class="stat-item">
+                <span class="stat-label">Total Required</span>
+                <span class="stat-value">{{ comparison.required_total }}</span>
+            </div>
+            <div class="stat-item stat-success">
+                <span class="stat-label">Available</span>
+                <span class="stat-value">{{ comparison.sufficient_count }}</span>
+            </div>
+            <div class="stat-item stat-warning">
+                <span class="stat-label">Partial</span>
+                <span class="stat-value">{{ comparison.partial_count }}</span>
+            </div>
+            <div class="stat-item stat-danger">
+                <span class="stat-label">Missing</span>
+                <span class="stat-value">{{ comparison.missing_count }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="inventory-sections">
+    <div class="inventory-section">
+        <h3 class="app-section-title">Missing ingredients</h3>
+        {% if comparison.missing %}
+        <div class="ingredients-grid">
+            {% for name, data in comparison.missing.items() %}
+            <div class="ingredient-card missing">
+                <div class="ingredient-header">
+                    <h4>{{ data.name }}</h4>
+                    <span class="category-badge">{{ data.category }}</span>
+                </div>
+                <div class="ingredient-details">
+                    <p><strong>Needed:</strong> {{ data.quantity }} {{ data.unit }}</p>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="markAvailable({{ data.ingredient_id }}, {{ data.quantity }}, '{{ data.unit }}')">
+                    Mark as Available
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        {% call empty_state('All ingredients available', 'You have everything you need for this week\'s meals.', '✓') %}{% endcall %}
+        {% endif %}
+    </div>
+
+    <div class="inventory-section">
+        <h3 class="app-section-title">Partially available</h3>
+        {% if comparison.partial %}
+        <div class="ingredients-grid">
+            {% for name, data in comparison.partial.items() %}
+            <div class="ingredient-card partial">
+                <div class="ingredient-header">
+                    <h4>{{ data.name }}</h4>
+                    <span class="category-badge">{{ data.category }}</span>
+                </div>
+                <div class="ingredient-details">
+                    <p><strong>Needed:</strong> {{ data.quantity }} {{ data.unit }}</p>
+                    <p><strong>Available:</strong> {{ data.available_quantity }} {{ data.unit }}</p>
+                    <p><strong>Still Need:</strong> {{ data.needed_quantity }} {{ data.unit }}</p>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="markAvailable({{ data.ingredient_id }}, {{ data.quantity }}, '{{ data.unit }}')">
+                    Update Quantity
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        {% call empty_state('Fully stocked', 'All ingredients are fully available for this week.', '✓') %}{% endcall %}
+        {% endif %}
+    </div>
+
+    <div class="inventory-section">
+        <h3 class="app-section-title">Available ingredients</h3>
+        {% if comparison.sufficient %}
+        <div class="ingredients-grid">
+            {% for name, data in comparison.sufficient.items() %}
+            <div class="ingredient-card sufficient">
+                <div class="ingredient-header">
+                    <h4>{{ data.name }}</h4>
+                    <span class="category-badge">{{ data.category }}</span>
+                </div>
+                <div class="ingredient-details">
+                    <p><strong>Required:</strong> {{ data.quantity }} {{ data.unit }}</p>
+                    <p><strong>Available:</strong> {{ data.available_quantity }} {{ data.unit }}</p>
+                </div>
+                <button class="btn btn-sm btn-secondary" onclick="markUnavailable({{ data.ingredient_id }})">
+                    Mark as Unavailable
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        {% call empty_state('No available ingredients', 'Mark ingredients as available to track what you have at home.') %}{% endcall %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function markAvailable(ingredientId, quantity, unit) {
+    const newQuantity = prompt(`Enter available quantity for this ingredient (${unit}):`, quantity);
+    if (newQuantity !== null && !isNaN(newQuantity)) {
+        updateInventory(ingredientId, parseFloat(newQuantity), unit, true);
+    }
+}
+
+function markUnavailable(ingredientId) {
+    if (confirm('Mark this ingredient as unavailable?')) {
+        updateInventory(ingredientId, 0, 'unit', false);
+    }
+}
+
+function updateInventory(ingredientId, quantity, unit, available) {
+    fetch('/update_inventory', {
+        method: 'POST',
+        headers: Object.assign(
+            { 'Content-Type': 'application/json' },
+            (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+        ),
+        body: JSON.stringify({
+            ingredient_id: ingredientId,
+            quantity: quantity,
+            unit: unit,
+            available: available,
+            week_start: '{{ week_start_date.isoformat() }}'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred');
+    });
+}
+</script>
+{% endblock %}

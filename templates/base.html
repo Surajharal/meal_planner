@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <title>{% block title %}Weekly Meal Planner{% endblock %}</title>
+    <script>
+    (function () {
+        try {
+            var t = localStorage.getItem("mealplanner-theme");
+            if (t === "dark" || t === "light") {
+                document.documentElement.setAttribute("data-theme", t);
+            }
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
+</head>
+<body>
+    <nav class="navbar" aria-label="Main navigation">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <h1 class="nav-logo"><a href="{{ url_for('index') }}" class="nav-logo-link">Meal Planner</a></h1>
+                <button type="button" class="theme-toggle-btn nav-theme-btn" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+            </div>
+            <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-menu" aria-label="Open menu">☰</button>
+            <div class="nav-shell" id="nav-menu">
+                <ul class="nav-links">
+                    <li><a href="{{ url_for('index') }}" class="nav-item {% if request.endpoint == 'index' %}is-active{% endif %}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}><span class="nav-link-label">Weekly Plan</span></a></li>
+                    <li><a href="{{ url_for('inventory') }}" class="nav-item {% if request.endpoint == 'inventory' %}is-active{% endif %}" {% if request.endpoint == 'inventory' %}aria-current="page"{% endif %}><span class="nav-link-label">Inventory</span></a></li>
+                    <li><a href="{{ url_for('shopping_list') }}" class="nav-item {% if request.endpoint == 'shopping_list' %}is-active{% endif %}" {% if request.endpoint == 'shopping_list' %}aria-current="page"{% endif %}><span class="nav-link-label">Shopping List</span></a></li>
+                    <li><a href="{{ url_for('recipes') }}" class="nav-item {% if request.endpoint in ('recipes', 'view_recipe') %}is-active{% endif %}" {% if request.endpoint in ('recipes', 'view_recipe') %}aria-current="page"{% endif %}><span class="nav-link-label">Recipes</span></a></li>
+                    {% if current_username %}
+                    <li class="nav-dropdown">
+                        <details class="nav-dropdown-details">
+                            <summary class="nav-dropdown-summary nav-item"><span class="nav-link-label">Diet plan</span></summary>
+                            <ul class="nav-dropdown-panel" role="menu">
+                                <li role="none"><a href="{{ url_for('ai_diet_plan') }}" role="menuitem">New plan with AI</a></li>
+                                <li role="none"><a href="{{ url_for('ai_diet_plan_history') }}" role="menuitem">Past plans</a></li>
+                            </ul>
+                        </details>
+                    </li>
+                    {% endif %}
+                </ul>
+                {% if current_username %}
+                <ul class="nav-actions">
+                    <li class="nav-dropdown nav-dropdown-end nav-user-menu">
+                        <details class="nav-dropdown-details nav-user-menu-details">
+                            <summary class="nav-dropdown-summary nav-account-summary" aria-label="Account menu">
+                                <span class="nav-account-avatar" aria-hidden="true">{{ current_username[0]|upper }}</span>
+                                <span class="nav-account-meta">
+                                    <span class="nav-account-email" title="{{ current_username }}">{{ current_username }}</span>
+                                    {% if current_role %}<span class="nav-account-role">{{ current_role }}</span>{% endif %}
+                                </span>
+                            </summary>
+                            <ul class="nav-dropdown-panel" role="menu">
+                                <li class="nav-dropdown-header" role="presentation">
+                                    <span class="nav-dropdown-header-label">Signed in as</span>
+                                    <span class="nav-dropdown-header-email">{{ current_username }}</span>
+                                    {% if current_role %}<span class="nav-dropdown-header-role">{{ current_role }}</span>{% endif %}
+                                </li>
+                                <li class="nav-dropdown-divider" aria-hidden="true"></li>
+                                <li role="none"><a href="{{ url_for('change_password') }}" role="menuitem">Change password</a></li>
+                                <li role="none"><a href="{{ url_for('logout') }}" role="menuitem">Log out</a></li>
+                                {% if is_admin %}
+                                <li class="nav-dropdown-divider" aria-hidden="true"></li>
+                                <li role="none"><a href="{{ url_for('admin_users') }}#create-user" role="menuitem">Create new user</a></li>
+                                <li role="none"><a href="{{ url_for('admin_users') }}" role="menuitem">User management</a></li>
+                                {% endif %}
+                            </ul>
+                        </details>
+                    </li>
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages" role="status">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ai-loading.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

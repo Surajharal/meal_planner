@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Past AI diet plans{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Your AI diet plans</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('ai_diet_plan') }}" class="btn btn-primary">+ New plan</a>
+    </div>
+</div>
+
+{% if not plans %}
+<div class="empty-state-enhanced">
+    <p>No saved plans yet. Create one from your profile and goals.</p>
+    <a href="{{ url_for('ai_diet_plan') }}" class="btn btn-primary">Make AI diet plan</a>
+</div>
+{% else %}
+<div class="inventory-sections">
+    {% for p in plans %}
+    <div class="inventory-section">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+            <div>
+                <h3 style="margin:0 0 0.35rem;font-size:1.1rem;">
+                    {{ p.age }} yrs · {{ "%.0f"|format(p.weight_kg) }} kg · {{ "%.0f"|format(p.height_cm) }} cm
+                </h3>
+                <p style="color:#666;font-size:0.9rem;margin:0;">
+                    Goal: {{ p.goal.replace('_', ' ') }} · {{ p.created_at.strftime('%b %d, %Y') if p.created_at else '' }}
+                </p>
+            </div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                <a href="{{ url_for('ai_diet_plan_detail', plan_id=p.id) }}" class="btn btn-sm btn-info">Open</a>
+                <form method="post" action="{{ url_for('ai_diet_plan_delete', plan_id=p.id) }}" style="display:inline;margin:0;"
+                      onsubmit="return confirm('Delete this AI diet plan? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

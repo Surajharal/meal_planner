@@ -1,0 +1,24 @@
+{% macro page_header(title, subtitle=None) %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">{{ title }}</h2>
+        {% if subtitle %}<p class="app-page-subtitle">{{ subtitle }}</p>{% endif %}
+    </div>
+    {% if caller %}
+    <div class="app-page-header-actions">
+        {{ caller() }}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro empty_state(title, message=None, icon='') %}
+<div class="app-empty-state">
+    {% if icon %}<div class="app-empty-state-icon" aria-hidden="true">{{ icon }}</div>{% endif %}
+    <p class="app-empty-state-title">{{ title }}</p>
+    {% if message %}<p class="app-empty-state-message">{{ message }}</p>{% endif %}
+    {% if caller %}
+    <div class="app-empty-state-actions">{{ caller() }}</div>
+    {% endif %}
+</div>
+{% endmacro %}

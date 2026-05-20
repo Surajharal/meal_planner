@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Admin · Users{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">User management</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Home</a>
+    </div>
+</div>
+
+<div id="create-user" class="form-container form-container--wide app-section">
+    <h3 class="app-section-title">Create user</h3>
+    <form method="post" class="meal-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="create">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required maxlength="255" autocomplete="off" placeholder="user@example.com">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password">
+            </div>
+        </div>
+        <p class="form-hint app-form-hint">
+            Only <strong>administrators</strong> can open this page. New accounts are <strong>gyama</strong> (meal planner, AI diet plans). Admins may change roles or remove users below. Admins can also sign in at <code>/login/admin</code> using <code>.env</code> credentials.
+        </p>
+        <button type="submit" class="btn btn-primary">Create user</button>
+    </form>
+</div>
+
+<div class="app-section">
+    <h3 class="app-section-title">All users</h3>
+    <div class="app-table-wrap">
+        <table class="app-table admin-user-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Email / username</th>
+                    <th>Role</th>
+                    <th>Change role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.email or u.username }}</td>
+                    <td><span class="role-badge role-{{ u.role }}">{{ u.role }}</span></td>
+                    <td>
+                        <form method="post" class="inline-form-row">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="set_role">
+                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                            <select name="role" class="category-select select-compact">
+                                {% for r in all_roles %}
+                                <option value="{{ r }}" {% if u.role == r %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-secondary">Save</button>
+                        </form>
+                    </td>
+                    <td>
+                        {% if u.id == current_user_id %}
+                        <span class="admin-action-muted" title="Sign in as another admin to remove this account">—</span>
+                        {% else %}
+                        <form method="post" class="admin-delete-form" onsubmit="return confirm('Permanently remove this user? Their AI diet plans will be deleted. This cannot be undone.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

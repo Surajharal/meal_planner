@@ -1,0 +1,779 @@
+{% extends "base.html" %}
+
+{% block title %}Add Meal - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Add New Meal</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">← Back to Plan</a>
+    </div>
+</div>
+
+<div class="form-container">
+    <div class="add-meal-tabs">
+        <button type="button" class="tab-btn active" id="tab-generate">
+            ✨ Generate New Recipe
+        </button>
+        <button type="button" class="tab-btn" id="tab-existing">
+            📖 Use Existing Recipe
+        </button>
+        <button type="button" class="tab-btn{% if not has_pantry %} tab-btn-disabled{% endif %}" id="tab-pantry"{% if not has_pantry %} title="Mark ingredients as available on the Inventory page first"{% endif %}>
+            🥫 From my pantry
+        </button>
+    </div>
+
+    <!-- Generate New Recipe Tab -->
+    <form id="addMealForm" class="meal-form tab-content active" style="display: block;">
+        <div class="form-group">
+            <label for="meal_name">Meal Name *</label>
+            <input type="text" id="meal_name" name="meal_name" required placeholder="e.g., Chicken Curry, Pasta Carbonara">
+            <small>Enter the name of the dish you want to prepare</small>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="day">Day *</label>
+                <select id="day" name="day" required>
+                    {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                    {% for day in days %}
+                        {% if day_is_past[day] %}
+                            <option value="{{ day }}" disabled>{{ day }} ({{ day_dates[day].strftime('%b %d') }}) - Past</option>
+                        {% else %}
+                            <option value="{{ day }}"{% if preselected_day == day %} selected{% endif %}>{{ day }} ({{ day_dates[day].strftime('%b %d') }})</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+                <small id="day-warning" style="color: #dc3545; display: none;">⚠️ Cannot add meals to past dates</small>
+            </div>
+
+            <div class="form-group">
+                <label for="meal_type">Meal Type *</label>
+                <select id="meal_type" name="meal_type" required>
+                    <option value="Breakfast"{% if preselected_meal_type == 'Breakfast' %} selected{% endif %}>Breakfast</option>
+                    <option value="Lunch"{% if preselected_meal_type == 'Lunch' %} selected{% endif %}>Lunch</option>
+                    <option value="Dinner"{% if preselected_meal_type == 'Dinner' %} selected{% endif %}>Dinner</option>
+                    <option value="Snack"{% if preselected_meal_type == 'Snack' %} selected{% endif %}>Snack</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="servings">Servings *</label>
+                <input type="number" id="servings" name="servings" value="4" min="1" required>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span id="submitText">Generate Recipe & Add Meal</span>
+                <span id="loadingText" style="display: none;">Generating recipe with AI...</span>
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+        </div>
+    </form>
+
+    <!-- Use Existing Recipe Tab -->
+    <form id="useExistingRecipeForm" class="meal-form tab-content" style="display: none;">
+        <div class="form-group">
+            <label for="existing_recipe">Select Recipe *</label>
+            <select id="existing_recipe" name="existing_recipe" required>
+                <option value="">Select a recipe...</option>
+                {% if preselected_recipe %}
+                {% set pnb = preselected_recipe|recipe_nutrition %}
+                <option value="{{ preselected_recipe.id }}" selected
+                    data-recipe-servings="{{ preselected_recipe.servings or 1 }}"
+                    {% if pnb and pnb.calories_kcal is not none %}data-nut-cal="{{ pnb.calories_kcal }}"{% endif %}
+                    {% if pnb and pnb.protein_g is not none %}data-nut-protein="{{ pnb.protein_g }}"{% endif %}
+                    {% if pnb and pnb.carbs_g is not none %}data-nut-carbs="{{ pnb.carbs_g }}"{% endif %}
+                    {% if pnb and pnb.fat_g is not none %}data-nut-fat="{{ pnb.fat_g }}"{% endif %}
+                >{{ preselected_recipe.name }}{% if preselected_is_favorite %} ⭐{% endif %}</option>
+                {% endif %}
+            </select>
+            <small>Choose from the shared recipe library (everyone’s recipes appear here)</small>
+            <div id="existing_nutrition_preview" class="meal-nutrition existing-nutrition-preview" style="display: none;" aria-live="polite">
+                <span class="meal-nutrition-title">Estimated nutrition for this meal</span>
+                <div class="meal-nutrition-values" id="existing_nutrition_values"></div>
+                <p class="meal-nutrition-note">Scaled from the recipe total using your servings above. Estimates only — not medical advice.</p>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label for="existing_day">Day *</label>
+                <select id="existing_day" name="existing_day" required>
+                    {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                    {% for day in days %}
+                        {% if day_is_past[day] %}
+                            <option value="{{ day }}" disabled>{{ day }} ({{ day_dates[day].strftime('%b %d') }}) - Past</option>
+                        {% else %}
+                            <option value="{{ day }}"{% if preselected_day == day %} selected{% endif %}>{{ day }} ({{ day_dates[day].strftime('%b %d') }})</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="existing_meal_type">Meal Type *</label>
+                <select id="existing_meal_type" name="existing_meal_type" required>
+                    <option value="Breakfast"{% if preselected_meal_type == 'Breakfast' %} selected{% endif %}>Breakfast</option>
+                    <option value="Lunch"{% if preselected_meal_type == 'Lunch' %} selected{% endif %}>Lunch</option>
+                    <option value="Dinner"{% if preselected_meal_type == 'Dinner' %} selected{% endif %}>Dinner</option>
+                    <option value="Snack"{% if preselected_meal_type == 'Snack' %} selected{% endif %}>Snack</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="existing_servings">Servings *</label>
+                <input type="number" id="existing_servings" name="existing_servings" value="4" min="1" required>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="submitExistingBtn">
+                Add Recipe to Meal Plan
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+        </div>
+    </form>
+
+    {% if has_pantry %}
+    <form id="pantryMealForm" class="meal-form tab-content" style="display: none;">
+        <p class="pantry-intro">AI will suggest one recipe using the ingredients you have in stock for this week (plus basic staples like salt, oil, and water if needed). After it is generated, you can decide whether to add it to your weekly plan.</p>
+        <div class="pantry-ingredient-list" id="pantryIngredientList" aria-label="Available ingredients">
+            {% for item in pantry_items %}
+            <span class="pantry-chip">{{ item.name }} · {{ item.quantity }} {{ item.unit }}</span>
+            {% endfor %}
+        </div>
+        <div class="form-group">
+            <label for="pantry_style_hint">Style or mood (optional)</label>
+            <input type="text" id="pantry_style_hint" name="pantry_style_hint" maxlength="500" class="pantry-generate-input" placeholder="e.g. quick, Indian-inspired, one-pot">
+            <small>Narrow down cuisine or cooking style</small>
+        </div>
+        <div class="form-group pantry-confirm-wrap">
+            <label class="pantry-confirm-label">
+                <input type="checkbox" id="pantry_confirm" name="pantry_confirm" class="pantry-generate-input" required>
+                I want the app to call AI and generate a recipe using my listed ingredients (and basic staples only if needed).
+            </label>
+        </div>
+        <div class="form-actions pantry-form-actions">
+            <button type="submit" class="btn btn-primary" id="submitPantryBtn">
+                <span id="pantrySubmitText">Generate from pantry</span>
+                <span id="pantryLoadingText" style="display: none;">Generating recipe…</span>
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+        </div>
+        <div id="pantryConfirmPanel" class="pantry-confirm-panel" style="display: none;" role="region" aria-label="Confirm add to weekly plan">
+            <h4 class="pantry-confirm-title">Add this recipe to your plan?</h4>
+            <p id="pantryConfirmLead" class="pantry-confirm-lead"></p>
+            <p id="pantryConfirmDesc" class="pantry-confirm-desc"></p>
+            <p id="pantryConfirmMeta" class="pantry-confirm-meta"></p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="pantry_day">Day *</label>
+                    <select id="pantry_day" name="pantry_day">
+                        {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+                        {% for day in days %}
+                            {% if day_is_past[day] %}
+                                <option value="{{ day }}" disabled>{{ day }} ({{ day_dates[day].strftime('%b %d') }}) - Past</option>
+                            {% else %}
+                                <option value="{{ day }}"{% if preselected_day == day %} selected{% endif %}>{{ day }} ({{ day_dates[day].strftime('%b %d') }})</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pantry_meal_type">Meal type *</label>
+                    <select id="pantry_meal_type" name="pantry_meal_type">
+                        <option value="Breakfast"{% if preselected_meal_type == 'Breakfast' %} selected{% endif %}>Breakfast</option>
+                        <option value="Lunch"{% if preselected_meal_type == 'Lunch' %} selected{% endif %}>Lunch</option>
+                        <option value="Dinner"{% if preselected_meal_type == 'Dinner' %} selected{% endif %}>Dinner</option>
+                        <option value="Snack"{% if preselected_meal_type == 'Snack' %} selected{% endif %}>Snack</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="pantry_servings">Servings *</label>
+                    <input type="number" id="pantry_servings" name="pantry_servings" value="4" min="1">
+                </div>
+            </div>
+            <div class="pantry-confirm-actions">
+                <button type="button" class="btn btn-primary" id="pantryConfirmYes">Yes, add to this day</button>
+                <button type="button" class="btn btn-secondary" id="pantryConfirmNo">No, don’t add to the plan</button>
+                <a href="#" class="btn btn-sm btn-info" id="pantryConfirmView" target="_blank" rel="noopener">View full recipe</a>
+            </div>
+            <p class="pantry-confirm-hint">If you choose No, the recipe is still saved in <strong>Recipes</strong> for everyone — only the weekly slot stays empty.</p>
+        </div>
+    </form>
+    {% endif %}
+
+    <div id="errorMessage" class="error-message" style="display: none;"></div>
+    <div id="successMessage" class="success-message" style="display: none;"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Pre-select day / meal type from calendar link (?day=…&meal_type=…)
+(function applyAddMealQueryParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const planDate = urlParams.get('plan_date');
+    const day = urlParams.get('day');
+    const mealType = urlParams.get('meal_type');
+    if (planDate) {
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const d = new Date(planDate + 'T12:00:00');
+        if (!isNaN(d.getTime())) {
+            const dayFromDate = dayNames[d.getDay()];
+            ['day', 'existing_day', 'pantry_day'].forEach(function (id) {
+                const el = document.getElementById(id);
+                if (el && el.querySelector('option[value="' + dayFromDate + '"]:not([disabled])')) {
+                    el.value = dayFromDate;
+                }
+            });
+        }
+    } else if (day) {
+        ['day', 'existing_day', 'pantry_day'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el && el.querySelector('option[value="' + day + '"]:not([disabled])')) {
+                el.value = day;
+            }
+        });
+    }
+    if (mealType) {
+        ['meal_type', 'existing_meal_type', 'pantry_meal_type'].forEach(function (id) {
+            const el = document.getElementById(id);
+            if (el) el.value = mealType;
+        });
+    }
+})();
+
+// Validate day selection on change
+const daySelect = document.getElementById('day');
+const dayWarning = document.getElementById('day-warning');
+const submitBtn = document.getElementById('submitBtn');
+
+daySelect.addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+    if (selected.disabled) {
+        dayWarning.style.display = 'block';
+        dayWarning.textContent = `⚠️ Cannot add meals to past dates. ${selected.text}`;
+        submitBtn.disabled = true;
+    } else {
+        dayWarning.style.display = 'none';
+        submitBtn.disabled = false;
+    }
+});
+
+// Check initial selection when page loads
+const initialSelected = daySelect.options[daySelect.selectedIndex];
+if (initialSelected && initialSelected.disabled) {
+    dayWarning.style.display = 'block';
+    dayWarning.textContent = `⚠️ Cannot add meals to past dates. ${initialSelected.text}`;
+    submitBtn.disabled = true;
+}
+
+document.getElementById('addMealForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitText = document.getElementById('submitText');
+    const loadingText = document.getElementById('loadingText');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    
+    const day = daySelect.value;
+    const meal_type = document.getElementById('meal_type').value;
+
+    // Check if selected day is disabled (past date)
+    const selectedOption = daySelect.options[daySelect.selectedIndex];
+    if (selectedOption.disabled) {
+        dayWarning.style.display = 'block';
+        dayWarning.textContent = `⚠️ Cannot add meals to past dates. ${selectedOption.text}`;
+        errorMessage.textContent = 'Please select a valid (non-past) date';
+        errorMessage.style.display = 'block';
+        return;
+    }
+    
+    const formData = {
+        meal_name: document.getElementById('meal_name').value,
+        day: day,
+        meal_type: meal_type,
+        servings: parseInt(document.getElementById('servings').value),
+        week_start: '{{ week_start_date.isoformat() }}'
+    };
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    submitText.style.display = 'none';
+    loadingText.style.display = 'inline';
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
+    if (typeof showAiLoading === 'function') showAiLoading('Generating recipe with AI…');
+    
+    try {
+        const response = await fetch('/add_meal', {
+            method: 'POST',
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+            ),
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            successMessage.textContent = data.message;
+            successMessage.style.display = 'block';
+            
+            // Redirect after 2 seconds
+            setTimeout(() => {
+                window.location.href = '/?week_start={{ week_start_date.isoformat() }}';
+            }, 2000);
+        } else {
+            errorMessage.textContent = data.message || 'An error occurred';
+            errorMessage.style.display = 'block';
+            submitBtn.disabled = false;
+            submitText.style.display = 'inline';
+            loadingText.style.display = 'none';
+            if (typeof hideAiLoading === 'function') hideAiLoading();
+        }
+    } catch (error) {
+        errorMessage.textContent = 'Network error: ' + error.message;
+        errorMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitText.style.display = 'inline';
+        loadingText.style.display = 'none';
+        if (typeof hideAiLoading === 'function') hideAiLoading();
+    }
+});
+
+// Tab switching
+function switchTab(tab) {
+    const generateTab = document.getElementById('addMealForm');
+    const existingTab = document.getElementById('useExistingRecipeForm');
+    const pantryTab = document.getElementById('pantryMealForm');
+    const generateBtn = document.getElementById('tab-generate');
+    const existingBtn = document.getElementById('tab-existing');
+    const pantryBtn = document.getElementById('tab-pantry');
+    
+    if (!generateTab || !existingTab || !generateBtn || !existingBtn) {
+        console.error('Tab elements not found');
+        return;
+    }
+    
+    [generateTab, existingTab, pantryTab].forEach(function(el) {
+        if (!el) return;
+        el.style.display = 'none';
+        el.classList.remove('active');
+    });
+    [generateBtn, existingBtn, pantryBtn].forEach(function(btn) {
+        if (btn) btn.classList.remove('active');
+    });
+    
+    if (tab === 'generate') {
+        generateTab.style.display = 'block';
+        generateTab.classList.add('active');
+        generateBtn.classList.add('active');
+    } else if (tab === 'existing') {
+        existingTab.style.display = 'block';
+        existingTab.classList.add('active');
+        existingBtn.classList.add('active');
+        loadExistingRecipes();
+    } else if (tab === 'pantry' && pantryTab && pantryBtn) {
+        pantryTab.style.display = 'block';
+        pantryTab.classList.add('active');
+        pantryBtn.classList.add('active');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const generateBtn = document.getElementById('tab-generate');
+    const existingBtn = document.getElementById('tab-existing');
+    const pantryBtn = document.getElementById('tab-pantry');
+    
+    if (generateBtn) {
+        generateBtn.addEventListener('click', function() { switchTab('generate'); });
+    }
+    if (existingBtn) {
+        existingBtn.addEventListener('click', function() { switchTab('existing'); });
+    }
+
+    const existingRecipeSelect = document.getElementById('existing_recipe');
+    const existingServings = document.getElementById('existing_servings');
+    if (existingRecipeSelect) {
+        existingRecipeSelect.addEventListener('change', updateExistingNutritionPreview);
+    }
+    if (existingServings) {
+        existingServings.addEventListener('input', updateExistingNutritionPreview);
+    }
+    if (pantryBtn) {
+        pantryBtn.addEventListener('click', function() {
+            if (pantryBtn.classList.contains('tab-btn-disabled')) return;
+            switchTab('pantry');
+        });
+    }
+});
+
+{% if preselected_recipe %}
+window.addEventListener('DOMContentLoaded', function() {
+    switchTab('existing');
+});
+{% elif open_pantry_tab %}
+window.addEventListener('DOMContentLoaded', function() {
+    switchTab('pantry');
+});
+{% endif %}
+
+function applyNutritionDataset(option, recipe) {
+    const rs = recipe.servings && recipe.servings > 0 ? recipe.servings : 1;
+    option.dataset.recipeServings = String(rs);
+    const n = recipe.nutrition;
+    if (!n) return;
+    if (n.calories_kcal != null) option.dataset.nutCal = String(n.calories_kcal);
+    if (n.protein_g != null) option.dataset.nutProtein = String(n.protein_g);
+    if (n.carbs_g != null) option.dataset.nutCarbs = String(n.carbs_g);
+    if (n.fat_g != null) option.dataset.nutFat = String(n.fat_g);
+}
+
+function updateExistingNutritionPreview() {
+    const select = document.getElementById('existing_recipe');
+    const box = document.getElementById('existing_nutrition_preview');
+    const valuesEl = document.getElementById('existing_nutrition_values');
+    const servingsInput = document.getElementById('existing_servings');
+    if (!select || !box || !valuesEl || !servingsInput) return;
+
+    const opt = select.options[select.selectedIndex];
+    if (!opt || !opt.value) {
+        box.style.display = 'none';
+        valuesEl.innerHTML = '';
+        return;
+    }
+
+    const recipeServings = parseFloat(opt.dataset.recipeServings) || 1;
+    const mealServings = parseFloat(servingsInput.value) || 0;
+    const factor = recipeServings > 0 ? mealServings / recipeServings : 0;
+
+    const cal = opt.dataset.nutCal !== undefined && opt.dataset.nutCal !== '' ? parseFloat(opt.dataset.nutCal) : null;
+    const p = opt.dataset.nutProtein !== undefined && opt.dataset.nutProtein !== '' ? parseFloat(opt.dataset.nutProtein) : null;
+    const c = opt.dataset.nutCarbs !== undefined && opt.dataset.nutCarbs !== '' ? parseFloat(opt.dataset.nutCarbs) : null;
+    const f = opt.dataset.nutFat !== undefined && opt.dataset.nutFat !== '' ? parseFloat(opt.dataset.nutFat) : null;
+
+    if (cal == null && p == null && c == null && f == null) {
+        box.style.display = 'none';
+        valuesEl.innerHTML = '';
+        return;
+    }
+
+    function sc(v) {
+        if (v == null || v !== v) return null;
+        return Math.round(v * factor * 10) / 10;
+    }
+
+    const parts = [];
+    const kcal = sc(cal);
+    const pg = sc(p);
+    const cg = sc(c);
+    const fg = sc(f);
+    if (kcal != null) parts.push('<span class="nut-pill kcal">~' + kcal + ' kcal</span>');
+    if (pg != null) parts.push('<span class="nut-pill">P ' + pg + 'g</span>');
+    if (cg != null) parts.push('<span class="nut-pill">C ' + cg + 'g</span>');
+    if (fg != null) parts.push('<span class="nut-pill">F ' + fg + 'g</span>');
+
+    if (!parts.length) {
+        box.style.display = 'none';
+        valuesEl.innerHTML = '';
+        return;
+    }
+
+    valuesEl.innerHTML = parts.join('');
+    box.style.display = 'flex';
+}
+
+// Load existing recipes for dropdown
+async function loadExistingRecipes() {
+    const select = document.getElementById('existing_recipe');
+    if (select.dataset.recipesLoaded === '1') {
+        updateExistingNutritionPreview();
+        return;
+    }
+
+    const keepId = select.value;
+
+    try {
+        const response = await fetch('/api/recipes');
+        const data = await response.json();
+
+        select.innerHTML = '<option value="">Select a recipe...</option>';
+        if (data.recipes && data.recipes.length > 0) {
+            data.recipes.forEach(recipe => {
+                const option = document.createElement('option');
+                option.value = recipe.id;
+                option.textContent = recipe.name + (recipe.is_favorite ? ' ⭐' : '');
+                applyNutritionDataset(option, recipe);
+                select.appendChild(option);
+            });
+        } else {
+            select.innerHTML = '<option value="">No recipes available. Generate one first!</option>';
+        }
+
+        if (keepId) {
+            select.value = keepId;
+        }
+        select.dataset.recipesLoaded = '1';
+        updateExistingNutritionPreview();
+    } catch (error) {
+        select.innerHTML = '<option value="">Error loading recipes</option>';
+        console.error('Error loading recipes:', error);
+    }
+}
+
+// Handle existing recipe form submission
+document.getElementById('useExistingRecipeForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = document.getElementById('submitExistingBtn');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    
+    const recipeId = document.getElementById('existing_recipe').value;
+    const day = document.getElementById('existing_day').value;
+    const mealType = document.getElementById('existing_meal_type').value;
+    const servings = parseInt(document.getElementById('existing_servings').value);
+    
+    if (!recipeId) {
+        errorMessage.textContent = 'Please select a recipe';
+        errorMessage.style.display = 'block';
+        return;
+    }
+    
+    // Check if selected day is disabled
+    const daySelect = document.getElementById('existing_day');
+    const selectedOption = daySelect.options[daySelect.selectedIndex];
+    if (selectedOption.disabled) {
+        errorMessage.textContent = 'Cannot add meals to past dates';
+        errorMessage.style.display = 'block';
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+    errorMessage.style.display = 'none';
+    successMessage.style.display = 'none';
+    
+    try {
+        const response = await fetch('/add_existing_recipe', {
+            method: 'POST',
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+            ),
+            body: JSON.stringify({
+                recipe_id: parseInt(recipeId),
+                day: day,
+                meal_type: mealType,
+                servings: servings,
+                week_start: '{{ week_start_date.isoformat() }}'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            successMessage.textContent = data.message;
+            successMessage.style.display = 'block';
+            setTimeout(() => {
+                window.location.href = '/?week_start={{ week_start_date.isoformat() }}';
+            }, 1500);
+        } else {
+            errorMessage.textContent = data.message || 'An error occurred';
+            errorMessage.style.display = 'block';
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Add Recipe to Meal Plan';
+        }
+    } catch (error) {
+        errorMessage.textContent = 'Network error: ' + error.message;
+        errorMessage.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Recipe to Meal Plan';
+    }
+});
+
+(function() {
+    const pantryForm = document.getElementById('pantryMealForm');
+    if (!pantryForm) return;
+
+    const submitBtn = document.getElementById('submitPantryBtn');
+    const submitText = document.getElementById('pantrySubmitText');
+    const loadingText = document.getElementById('pantryLoadingText');
+    const errorMessage = document.getElementById('errorMessage');
+    const successMessage = document.getElementById('successMessage');
+    const confirmPanel = document.getElementById('pantryConfirmPanel');
+    const pantryFormActions = pantryForm.querySelector('.pantry-form-actions');
+    let pendingRecipeId = null;
+    const pantryGenerateInputs = pantryForm.querySelectorAll('.pantry-generate-input');
+    const pantryDay = document.getElementById('pantry_day');
+    const pantryMealType = document.getElementById('pantry_meal_type');
+    const pantryServings = document.getElementById('pantry_servings');
+    const pantryUrlParams = new URLSearchParams(window.location.search);
+    if (pantryUrlParams.get('day')) pantryDay.value = pantryUrlParams.get('day');
+    if (pantryUrlParams.get('meal_type')) pantryMealType.value = pantryUrlParams.get('meal_type');
+
+    function resetPantryGenerateUi() {
+        submitBtn.disabled = false;
+        submitText.style.display = 'inline';
+        loadingText.style.display = 'none';
+        if (typeof hideAiLoading === 'function') hideAiLoading();
+    }
+
+    function hidePantryConfirm() {
+        pendingRecipeId = null;
+        if (confirmPanel) confirmPanel.style.display = 'none';
+        if (pantryFormActions) pantryFormActions.style.display = 'flex';
+        pantryGenerateInputs.forEach(function(el) {
+            el.disabled = false;
+        });
+    }
+
+    function showPantryConfirm(data) {
+        pendingRecipeId = data.recipe_id;
+        document.getElementById('pantryConfirmLead').textContent = data.message || '';
+        document.getElementById('pantryConfirmDesc').textContent = data.description || '';
+        document.getElementById('pantryConfirmMeta').textContent =
+            '⏱️ ~' + (data.prep_time + data.cook_time) + ' min · 👥 ' + data.servings + ' servings';
+        pantryServings.value = data.servings || pantryServings.value || 4;
+        if (data.meal_type) pantryMealType.value = data.meal_type;
+        var viewLink = document.getElementById('pantryConfirmView');
+        viewLink.href = '/recipe/' + data.recipe_id;
+        viewLink.style.display = 'inline-block';
+        if (pantryFormActions) pantryFormActions.style.display = 'none';
+        pantryGenerateInputs.forEach(function(el) {
+            el.disabled = true;
+        });
+        confirmPanel.style.display = 'block';
+        confirmPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    document.getElementById('pantryConfirmNo').addEventListener('click', async function() {
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        try {
+            await fetch('/add_meal_from_pantry', {
+                method: 'POST',
+                headers: Object.assign(
+                    { 'Content-Type': 'application/json' },
+                    (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+                ),
+                body: JSON.stringify({ mode: 'cancel_pending' })
+            });
+        } catch (e) { /* ignore */ }
+        hidePantryConfirm();
+        successMessage.textContent = 'Okay — the recipe is saved under Recipes and was not added to your weekly plan.';
+        successMessage.style.display = 'block';
+    });
+
+    document.getElementById('pantryConfirmYes').addEventListener('click', async function() {
+        if (!pendingRecipeId) return;
+        const btn = this;
+        const selectedOption = pantryDay.options[pantryDay.selectedIndex];
+        if (selectedOption && selectedOption.disabled) {
+            errorMessage.textContent = 'Cannot add meals to past dates';
+            errorMessage.style.display = 'block';
+            return;
+        }
+        btn.disabled = true;
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        try {
+            const response = await fetch('/add_meal_from_pantry', {
+                method: 'POST',
+                headers: Object.assign(
+                    { 'Content-Type': 'application/json' },
+                    (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+                ),
+                body: JSON.stringify({
+                    mode: 'confirm',
+                    confirmed: true,
+                    recipe_id: pendingRecipeId,
+                    day: pantryDay.value,
+                    meal_type: pantryMealType.value,
+                    servings: parseInt(pantryServings.value, 10) || 1,
+                    week_start: '{{ week_start_date.isoformat() }}'
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                successMessage.textContent = data.message;
+                successMessage.style.display = 'block';
+                hidePantryConfirm();
+                setTimeout(function() {
+                    window.location.href = '/?week_start={{ week_start_date.isoformat() }}';
+                }, 1200);
+            } else {
+                errorMessage.textContent = data.message || 'Could not add to plan';
+                errorMessage.style.display = 'block';
+                btn.disabled = false;
+            }
+        } catch (err) {
+            errorMessage.textContent = 'Network error: ' + err.message;
+            errorMessage.style.display = 'block';
+            btn.disabled = false;
+        }
+    });
+
+    pantryForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (!document.getElementById('pantry_confirm').checked) {
+            errorMessage.textContent = 'Please confirm that you want AI to generate from your pantry.';
+            errorMessage.style.display = 'block';
+            return;
+        }
+        const n = document.querySelectorAll('.pantry-chip').length;
+        if (!confirm('Generate a recipe using your ' + n + ' available ingredient(s)? This uses the AI API.')) {
+            return;
+        }
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        submitBtn.disabled = true;
+        submitText.style.display = 'none';
+        loadingText.style.display = 'inline';
+        if (typeof showAiLoading === 'function') showAiLoading('Generating recipe from your pantry…');
+        try {
+            const response = await fetch('/add_meal_from_pantry', {
+                method: 'POST',
+                headers: Object.assign(
+                    { 'Content-Type': 'application/json' },
+                    (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+                ),
+                body: JSON.stringify({
+                    mode: 'generate',
+                    week_start: '{{ week_start_date.isoformat() }}',
+                    style_hint: document.getElementById('pantry_style_hint').value,
+                    confirmed: true
+                })
+            });
+            const data = await response.json();
+            if (data.success && data.pending) {
+                resetPantryGenerateUi();
+                showPantryConfirm(data);
+            } else if (data.success) {
+                successMessage.textContent = data.message;
+                successMessage.style.display = 'block';
+                resetPantryGenerateUi();
+                setTimeout(function() {
+                    window.location.href = '/?week_start={{ week_start_date.isoformat() }}';
+                }, 2000);
+            } else {
+                errorMessage.textContent = data.message || 'An error occurred';
+                errorMessage.style.display = 'block';
+                resetPantryGenerateUi();
+            }
+        } catch (err) {
+            errorMessage.textContent = 'Network error: ' + err.message;
+            errorMessage.style.display = 'block';
+            resetPantryGenerateUi();
+        }
+    });
+})();
+</script>
+{% endblock %}

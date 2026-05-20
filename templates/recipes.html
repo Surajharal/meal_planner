@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}All Recipes - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">All Recipes</h2>
+        <div class="recipe-filters">
+            <a href="{{ url_for('recipes', favorites='false', search=search_term, category=category_filter, diet=diet_filter, cuisine=cuisine_filter) }}"
+               class="filter-btn {% if not show_favorites %}active{% endif %}">
+                All Recipes
+            </a>
+            <a href="{{ url_for('recipes', favorites='true', search=search_term, category=category_filter, diet=diet_filter, cuisine=cuisine_filter) }}"
+               class="filter-btn {% if show_favorites %}active{% endif %}">
+                Favorites
+            </a>
+        </div>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Plan</a>
+    </div>
+</div>
+
+<div class="search-filter-container">
+    <form method="GET" action="{{ url_for('recipes') }}" class="search-form">
+        <input type="hidden" name="favorites" value="{{ 'true' if show_favorites else 'false' }}">
+        <div class="search-input-group">
+            <select name="cuisine" class="category-select category-select-cuisine" aria-label="Cuisine">
+                <option value="" {% if not cuisine_filter %}selected{% endif %}>All cuisines</option>
+                {% for c in cuisine_options %}
+                <option value="{{ c }}" {% if cuisine_filter == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+                <option value="other" {% if cuisine_filter == 'other' %}selected{% endif %}>Other (user-added)</option>
+            </select>
+            <select name="diet" class="category-select" aria-label="Vegetarian or non-vegetarian">
+                <option value="" {% if not diet_filter %}selected{% endif %}>All diets</option>
+                <option value="veg" {% if diet_filter == 'veg' %}selected{% endif %}>Vegetarian</option>
+                <option value="non_veg" {% if diet_filter == 'non_veg' %}selected{% endif %}>Non-vegetarian</option>
+            </select>
+            <select name="category" class="category-select" aria-label="Ingredient category">
+                <option value="">All ingredient categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat }}" {% if category_filter == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+            <input type="text"
+                   name="search"
+                   placeholder="Search by name (optional)…"
+                   value="{{ search_term }}"
+                   class="search-input search-input-optional">
+            <button type="submit" class="btn btn-primary">Apply filters</button>
+            {% if search_term or category_filter or diet_filter or cuisine_filter %}
+            <a href="{{ url_for('recipes', favorites='true' if show_favorites else 'false') }}" class="btn btn-secondary">Clear</a>
+            {% endif %}
+        </div>
+    </form>
+    <p class="recipes-diet-filter-hint">
+        Use <strong>Cuisine</strong> and <strong>Diet</strong> to browse the 80 starter recipes (8 cuisines, 5 veg + 5 non-veg each).
+        Diet is inferred from ingredients. Optional search matches name or description.
+    </p>
+</div>
+
+<div class="recipes-grid">
+    {% if recipes %}
+        {% for recipe in recipes %}
+        <div class="recipe-card-small {% if recipe.id in favorite_recipe_ids %}favorite-recipe{% endif %}">
+            {% if recipe.image_url %}
+            <div class="recipe-card-thumb-wrap">
+                <img src="{{ recipe.image_url }}" alt="" class="recipe-card-thumb-img" loading="lazy" referrerpolicy="no-referrer" decoding="async">
+            </div>
+            {% else %}
+            <div class="recipe-card-thumb-placeholder" aria-hidden="true">🍽</div>
+            {% endif %}
+            <div class="recipe-card-header-small">
+                <div class="recipe-card-title-row">
+                    <h3>{{ recipe.name }}</h3>
+                    <span class="recipe-card-badges">
+                        {% set cuisine_label = recipe|recipe_cuisine_label %}
+                        {% if cuisine_label %}
+                        <span class="recipe-cuisine-badge">{{ cuisine_label }}</span>
+                        {% endif %}
+                        {% set dl = recipe|recipe_diet_label %}
+                        {% if dl != 'unknown' %}
+                        <span class="recipe-diet-badge {% if dl == 'non_vegetarian' %}recipe-diet-nv{% else %}recipe-diet-v{% endif %}">{{ 'Non-veg' if dl == 'non_vegetarian' else 'Veg' }}</span>
+                        {% endif %}
+                    </span>
+                </div>
+                <button type="button" class="favorite-btn {% if recipe.id in favorite_recipe_ids %}favorited{% endif %}"
+                        onclick="toggleFavorite({{ recipe.id }}, this)"
+                        title="{% if recipe.id in favorite_recipe_ids %}Remove from favorites{% else %}Add to favorites{% endif %}">
+                    ★
+                </button>
+            </div>
+            {% if recipe.description %}
+            <p class="recipe-description">{{ recipe.description[:100] }}{% if recipe.description|length > 100 %}...{% endif %}</p>
+            {% endif %}
+            <div class="recipe-meta-small">
+                <span>{{ recipe.prep_time + recipe.cook_time }} min</span>
+                <span>{{ recipe.servings }} servings</span>
+            </div>
+            {% set nb = recipe|recipe_nutrition_per_serving %}
+            {% if nb %}
+            <p class="recipe-nutrition-teaser" title="Estimate per serving (full recipe is {{ recipe.servings }} servings)">
+                {% if nb.calories_kcal is not none %}~{{ nb.calories_kcal|round(0, 'common')|int }} kcal/serving{% endif %}
+                {% if nb.protein_g is not none %} · P {{ nb.protein_g }}g{% endif %}
+                {% if nb.carbs_g is not none %} · C {{ nb.carbs_g }}g{% endif %}
+                {% if nb.fat_g is not none %} · F {{ nb.fat_g }}g{% endif %}
+            </p>
+            {% endif %}
+            <div class="recipe-actions">
+                <a href="{{ url_for('view_recipe', recipe_id=recipe.id) }}" class="btn btn-sm btn-info">
+                    View Details
+                </a>
+                <a href="{{ url_for('add_meal', week_start=week_start_date.isoformat() if week_start_date else none, recipe_id=recipe.id) }}"
+                   class="btn btn-sm btn-primary" title="Add to meal plan">
+                    Add to Plan
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p>{% if show_favorites %}No favorite recipes yet. Star any recipe to add it here.{% elif search_term or category_filter or diet_filter or cuisine_filter %}No recipes match your filters. Try another cuisine or clear filters.{% else %}No recipes yet. Add a meal to create your first recipe!{% endif %}</p>
+            {% if not show_favorites %}
+            <a href="{{ url_for('add_meal') }}" class="btn btn-primary">Add Meal</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

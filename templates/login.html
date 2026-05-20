@@ -1,0 +1,79 @@
+{% extends "auth_base.html" %}
+
+{% block title %}Sign in - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="login-card">
+    <div class="login-brand">
+        <span class="login-brand-icon" aria-hidden="true">MP</span>
+        <h1>Meal Planner</h1>
+        <p class="login-subtitle">Sign in or create an account</p>
+    </div>
+
+    <div class="login-tabs" role="tablist">
+        <a href="{{ url_for('login', tab='user', next=next or '') }}" class="login-tab {% if tab == 'user' %}login-tab-active{% endif %}" role="tab">Sign in</a>
+        <a href="{{ url_for('login', tab='signup', next=next or '') }}" class="login-tab {% if tab == 'signup' %}login-tab-active{% endif %}" role="tab">Create account</a>
+    </div>
+
+    {% if tab == 'user' %}
+    <form method="post" action="{{ url_for('login') }}" class="login-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next or '' }}">
+        <input type="hidden" name="login_mode" value="user">
+        <input type="hidden" name="tab" value="user">
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required autocomplete="email" autofocus placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-login">Sign in</button>
+    </form>
+    {% else %}
+    <div class="signup-steps">
+        <p class="login-hint">New here? Enter your email — we’ll send a verification code to that address only. Then enter the code and choose a password.</p>
+        <form method="post" action="{{ url_for('register_send_otp') }}" class="login-form signup-step">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ next or '' }}">
+            <h3 class="signup-step-title">1. Email</h3>
+            <div class="form-group">
+                <label for="signup_email_send">Email</label>
+                <input type="email" id="signup_email_send" name="email" required autocomplete="email" value="{{ session.get('signup_pending_email', '') }}" placeholder="you@example.com">
+            </div>
+            <button type="submit" class="btn btn-secondary btn-login">Send verification code</button>
+        </form>
+        <form method="post" action="{{ url_for('register_verify_otp') }}" class="login-form signup-step">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ next or '' }}">
+            <h3 class="signup-step-title">2. Verification code</h3>
+            <div class="form-group">
+                <label for="signup_email_otp">Email</label>
+                <input type="email" id="signup_email_otp" name="email" required value="{{ session.get('signup_pending_email', '') }}">
+            </div>
+            <div class="form-group">
+                <label for="otp">Code from email</label>
+                <input type="text" id="otp" name="otp" inputmode="numeric" pattern="[0-9]*" maxlength="10" autocomplete="one-time-code" placeholder="6-digit code">
+            </div>
+            <button type="submit" class="btn btn-secondary btn-login">Verify code</button>
+        </form>
+        <form method="post" action="{{ url_for('register_complete') }}" class="login-form signup-step">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ next or '' }}">
+            <h3 class="signup-step-title">3. Password</h3>
+            <p class="login-hint small">Complete this step only after your email is verified (step 2).</p>
+            <div class="form-group">
+                <label for="new_password">Password</label>
+                <input type="password" id="new_password" name="password" required minlength="6" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+                <label for="new_password_confirm">Confirm password</label>
+                <input type="password" id="new_password_confirm" name="password_confirm" required minlength="6" autocomplete="new-password">
+            </div>
+            <button type="submit" class="btn btn-primary btn-login">Create account</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

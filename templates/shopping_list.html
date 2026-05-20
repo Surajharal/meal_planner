@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping List - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Shopping List</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <button type="button" onclick="window.print()" class="btn btn-primary">Print</button>
+        <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">← Back to Plan</a>
+    </div>
+</div>
+
+<div class="shopping-summary">
+    <div class="summary-card">
+        <h3 class="app-section-title">Shopping Summary</h3>
+        <div class="summary-stats">
+            <div class="stat-item">
+                <span class="stat-label">Total Items</span>
+                <span class="stat-value">{{ summary.total_items }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Categories</span>
+                <span class="stat-value">{{ summary.total_categories }}</span>
+            </div>
+            <div class="stat-item stat-danger">
+                <span class="stat-label">Missing Items</span>
+                <span class="stat-value">{{ summary.summary.missing_count }}</span>
+            </div>
+            <div class="stat-item stat-warning">
+                <span class="stat-label">Partial Items</span>
+                <span class="stat-value">{{ summary.summary.partial_count }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if shopping_list.items_by_category %}
+<div class="shopping-delivery-panel" role="region" aria-label="Order online">
+    <h3 class="shopping-delivery-title">Order online &amp; compare prices</h3>
+    <p class="shopping-delivery-note">
+        We can’t show live delivery prices here (each app has its own catalog and fees).
+        Open a store below, or use per-item links to search and compare availability.
+    </p>
+    <div class="delivery-chips delivery-chips-home">
+        {% for link in shopping_list.delivery_home_links %}
+        <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="delivery-chip delivery-chip-home">{{ link.label }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="shopping-progress">
+    <span id="shopping-checked-count">0 checked</span>
+    <button type="button" class="btn btn-sm btn-secondary" id="shopping-clear-checked">Clear checks</button>
+</div>
+{% endif %}
+
+<div class="shopping-list-container" id="shopping-list-root" data-week-start="{{ week_start_date.isoformat() }}">
+    {% if shopping_list.items_by_category %}
+        {% for category in shopping_list.categories %}
+        <div class="shopping-category">
+            <h3 class="category-header">{{ category.title() }}</h3>
+            <ul class="shopping-items">
+                {% for item in shopping_list.items_by_category[category] %}
+                <li class="shopping-item" data-item-key="{{ item.name|lower }}|{{ item.unit|lower }}">
+                    <div class="shopping-item-row">
+                        <input type="checkbox" class="shopping-item-check" id="shop-{{ loop.index }}-{{ category|replace(' ', '-') }}" aria-label="Mark {{ item.name }} as bought">
+                        <div class="shopping-item-main">
+                            <label class="item-name" for="shop-{{ loop.index }}-{{ category|replace(' ', '-') }}">{{ item.name }}</label>
+                            <div class="shopping-item-qty">
+                                <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
+                                {% if item.status == 'partial' %}
+                                <span class="item-note">(Have {{ item.available_quantity }} {{ item.unit }})</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="shopping-item-delivery">
+                        <span class="delivery-label">Search &amp; price check</span>
+                        <div class="delivery-chips">
+                            {% for link in item.delivery_links %}
+                            <a href="{{ link.url }}" target="_blank" rel="noopener noreferrer" class="delivery-chip">{{ link.label }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="app-empty-state">
+            <p class="app-empty-state-title">All set</p>
+            <p class="app-empty-state-message">All ingredients are available. No shopping needed this week.</p>
+            <a href="{{ url_for('index') }}" class="btn btn-primary">View Meal Plan</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/shopping-list.js') }}"></script>
+{% endblock %}

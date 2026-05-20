@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}{{ recipe_details.recipe.name }} - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">{{ recipe_details.recipe.name }}</h2>
+        <div class="app-page-header-meta">
+            <button type="button" class="favorite-btn-large {% if recipe_favorited %}favorited{% endif %}"
+                    onclick="toggleFavorite({{ recipe_details.recipe.id }}, this)"
+                    title="{% if recipe_favorited %}Remove from favorites{% else %}Add to favorites{% endif %}">
+                {% if recipe_favorited %}Favorite{% else %}Add to Favorites{% endif %}
+            </button>
+        </div>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('recipes') }}" class="btn btn-secondary">← Back to Recipes</a>
+    </div>
+</div>
+
+<div class="meal-details-container">
+    <div class="recipe-card">
+        {% if recipe_details.recipe.image_url %}
+        <img src="{{ recipe_details.recipe.image_url }}" alt="" class="recipe-hero" loading="lazy" referrerpolicy="no-referrer" decoding="async">
+        {% endif %}
+
+        {% if is_admin %}
+        <div class="recipe-image-form">
+            <label for="recipe-image-url">Recipe photo (optional)</label>
+            <div class="form-row">
+                <input type="url" id="recipe-image-url" name="image_url" placeholder="https://… image link (JPG/PNG/WebP)"
+                       value="{{ recipe_details.recipe.image_url or '' }}" autocomplete="off">
+                <button type="button" class="btn btn-primary btn-sm" id="recipe-image-save">Save</button>
+                {% if recipe_details.recipe.image_url %}
+                <button type="button" class="btn btn-secondary btn-sm" id="recipe-image-clear">Remove</button>
+                {% endif %}
+            </div>
+            <p class="form-hint">Paste a direct link to an image. Only admin can change recipe photos. Hotlinking may fail for some sites.</p>
+        </div>
+        {% endif %}
+
+        <div class="recipe-regenerate-panel app-notice">
+            <h3 class="app-section-title" style="margin-bottom:0.5rem;">Regenerate with AI</h3>
+            <p class="form-hint" style="margin-bottom:0.75rem;">Updates this <strong>shared</strong> recipe for everyone. Optional tweaks below.</p>
+            <div class="form-row" style="align-items:flex-end;">
+                <div class="form-group" style="flex:1;margin:0;">
+                    <label for="recipe-regenerate-tweak">Adjustments (optional)</label>
+                    <input type="text" id="recipe-regenerate-tweak" maxlength="500" placeholder="e.g. spicier, fewer calories, dairy-free">
+                </div>
+                <button type="button" class="btn btn-primary" id="recipe-regenerate-btn">Regenerate recipe</button>
+            </div>
+        </div>
+
+        <div class="recipe-header">
+            <div class="recipe-meta">
+                <span class="meta-item">⏱️ Prep: {{ recipe_details.recipe.prep_time }} min</span>
+                <span class="meta-item">🔥 Cook: {{ recipe_details.recipe.cook_time }} min</span>
+                <span class="meta-item">👥 Servings: {{ recipe_details.recipe.servings }}</span>
+            </div>
+        </div>
+
+        {% set nb = recipe_details.recipe|recipe_nutrition_per_serving %}
+        {% if nb %}
+        <div class="recipe-section nutrition-section">
+            <h3>Nutrition (estimate)</h3>
+            <p class="nutrition-batch-intro"><strong>Per serving</strong> (recipe yields <strong>{{ nb.recipe_servings }}</strong> serving{% if nb.recipe_servings != 1 %}s{% endif %} as written).</p>
+            <div class="nutrition-grid">
+                {% if nb.calories_kcal is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ nb.calories_kcal|round(0, 'common')|int }}</span><span class="nutrition-stat-label">kcal / serving</span></div>{% endif %}
+                {% if nb.protein_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ nb.protein_g }}</span><span class="nutrition-stat-label">protein (g) / serving</span></div>{% endif %}
+                {% if nb.carbs_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ nb.carbs_g }}</span><span class="nutrition-stat-label">carbs (g) / serving</span></div>{% endif %}
+                {% if nb.fat_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ nb.fat_g }}</span><span class="nutrition-stat-label">fat (g) / serving</span></div>{% endif %}
+            </div>
+            <p class="meal-nutrition-disclaimer">Approximate values only — not medical or dietary advice.</p>
+        </div>
+        {% endif %}
+
+        {% if recipe_details.recipe.description %}
+        <div class="recipe-section">
+            <h3>Description</h3>
+            <p>{{ recipe_details.recipe.description }}</p>
+        </div>
+        {% endif %}
+
+        <div class="recipe-section">
+            <h3>Ingredients</h3>
+            <div class="ingredients-list">
+                {% for ingredient in recipe_details.ingredients %}
+                <div class="ingredient-item">
+                    <span class="ingredient-name">{{ ingredient.name }}</span>
+                    <span class="ingredient-quantity">{{ ingredient.quantity }} {{ ingredient.unit }}</span>
+                    <span class="ingredient-category">{{ ingredient.category }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="recipe-section">
+            <h3>Instructions</h3>
+            <div class="instructions">
+                {{ recipe_details.recipe.instructions | replace('\n', '<br>') | safe }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var id = {{ recipe_details.recipe.id }};
+
+    function post(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, typeof csrfHeaders === 'function' ? csrfHeaders() : {}),
+            body: JSON.stringify(body)
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); });
+    }
+
+    var input = document.getElementById('recipe-image-url');
+    var saveBtn = document.getElementById('recipe-image-save');
+    var clearBtn = document.getElementById('recipe-image-clear');
+    if (!input || !saveBtn) return;
+
+    saveBtn.addEventListener('click', function () {
+        post('/recipe/' + id + '/image', { image_url: input.value.trim() })
+            .then(function (res) {
+                if (res.ok && res.data.success) {
+                    if (typeof showToast === 'function') showToast(res.data.message, 'success');
+                    window.location.reload();
+                } else {
+                    if (typeof showToast === 'function') showToast((res.data && res.data.message) || 'Could not save', 'error');
+                    else alert((res.data && res.data.message) || 'Could not save');
+                }
+            })
+            .catch(function () {
+                if (typeof showToast === 'function') showToast('Network error', 'error');
+            });
+    });
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            input.value = '';
+            post('/recipe/' + id + '/image', { image_url: '' })
+                .then(function (res) {
+                    if (res.ok && res.data.success) {
+                        if (typeof showToast === 'function') showToast(res.data.message, 'success');
+                        window.location.reload();
+                    }
+                });
+        });
+    }
+
+    var regenBtn = document.getElementById('recipe-regenerate-btn');
+    var tweakInput = document.getElementById('recipe-regenerate-tweak');
+    if (regenBtn) {
+        regenBtn.addEventListener('click', function () {
+            if (!confirm('Regenerate this shared recipe with AI? Everyone will see the updated version.')) return;
+            if (typeof showAiLoading === 'function') showAiLoading('Regenerating recipe with AI…');
+            regenBtn.disabled = true;
+            post('/recipe/' + id + '/regenerate', { tweak: tweakInput ? tweakInput.value.trim() : '' })
+                .then(function (res) {
+                    if (typeof hideAiLoading === 'function') hideAiLoading();
+                    regenBtn.disabled = false;
+                    if (res.ok && res.data.success) {
+                        if (typeof showToast === 'function') showToast(res.data.message, 'success');
+                        window.location.href = res.data.redirect || window.location.href;
+                    } else {
+                        var msg = (res.data && res.data.message) || 'Regeneration failed';
+                        if (typeof showToast === 'function') showToast(msg, 'error');
+                        else alert(msg);
+                    }
+                })
+                .catch(function () {
+                    if (typeof hideAiLoading === 'function') hideAiLoading();
+                    regenBtn.disabled = false;
+                    if (typeof showToast === 'function') showToast('Network error', 'error');
+                });
+        });
+    }
+})();
+</script>
+{% endblock %}

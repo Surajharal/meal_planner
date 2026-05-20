@@ -1,0 +1,23 @@
+{# Shared fields for apply-week forms. Expects: week_start_date, default_meal_types, all_meal_types, form_id_prefix (optional) #}
+{% set p = form_id_prefix or '' %}
+<label for="{{ p }}week_start_apply" class="diet-apply-week-label">Week</label>
+<p class="diet-apply-week-hint">Pick any day in the week you want — we use that week’s Monday (same as Weekly Plan).</p>
+<input type="date" id="{{ p }}week_start_apply" name="week_start" value="{{ week_start_date.isoformat() }}" class="diet-week-date-input" required>
+
+<fieldset class="diet-meal-types-fieldset">
+    <legend class="diet-apply-week-label">Meal types to fill</legend>
+    <p class="diet-apply-week-hint">Only <strong>empty</strong> slots for today and later. Dinner + Lunch is fastest; all four types takes longer.</p>
+    <div class="diet-meal-types-grid">
+        {% for mt in all_meal_types %}
+        <label class="diet-meal-type-option">
+            <input type="checkbox" name="meal_types" value="{{ mt }}"
+                {% if mt in default_meal_types %}checked{% endif %}>
+            {{ mt }}
+        </label>
+        {% endfor %}
+    </div>
+</fieldset>
+
+{% if slot_stats is defined and slot_stats.eligible is defined %}
+<p class="diet-slot-stats">This week: <strong>{{ slot_stats.eligible }}</strong> empty slot(s) for Dinner + Lunch (upcoming days).</p>
+{% endif %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Error - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-content">
+        <h1 class="error-code">{{ error_code or 500 }}</h1>
+        <h2 class="error-title">{{ error_title or "Something went wrong" }}</h2>
+        <p class="error-message">{{ error_message or "We're sorry, but something unexpected happened." }}</p>
+        <div class="error-actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Go to Home</a>
+            <button onclick="window.history.back()" class="btn btn-secondary">Go Back</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

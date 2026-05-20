@@ -1,0 +1,18 @@
+{
+  "name": "Meal Planner",
+  "short_name": "Meals",
+  "description": "Weekly meal planning, recipes, and shopping lists",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#667eea",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

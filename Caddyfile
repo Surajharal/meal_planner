@@ -1,0 +1,16 @@
+# TLS terminates here; Flask stays on HTTP inside the Docker network.
+#
+# Local: open https://localhost (or https://127.0.0.1) — browser will warn once
+# for the self-signed cert; that is normal for tls internal.
+#
+# Production: replace the block below with your real hostname only, e.g.
+#   meal.example.com {
+#       reverse_proxy web:5010
+#   }
+# Caddy will obtain Let's Encrypt certificates automatically (ports 80+443 must
+# reach the internet).
+
+localhost, 127.0.0.1 {
+	tls internal
+	reverse_proxy web:5010
+}

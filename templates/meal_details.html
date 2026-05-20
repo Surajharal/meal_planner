@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}{{ meal_details.recipe.name }} - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">{{ meal_details.recipe.name }}</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">← Back to Plan</a>
+    </div>
+</div>
+
+<div class="meal-details-container">
+    <div class="recipe-card">
+        {% if meal_details.recipe.image_url %}
+        <img src="{{ meal_details.recipe.image_url }}" alt="" class="recipe-hero" loading="lazy" referrerpolicy="no-referrer" decoding="async">
+        {% endif %}
+        <div class="recipe-header">
+            <div class="recipe-meta">
+                <span class="meta-item">⏱️ Prep: {{ meal_details.recipe.prep_time }} min</span>
+                <span class="meta-item">🔥 Cook: {{ meal_details.recipe.cook_time }} min</span>
+                <span class="meta-item">👥 Servings: {{ meal_details.meal.servings }}</span>
+                <span class="meta-item">📅 Day: {{ meal_details.meal.day }}</span>
+                <span class="meta-item">🍽️ Type: {{ meal_details.meal.meal_type }}</span>
+            </div>
+        </div>
+
+        {% set n = meal_details.meal|meal_nutrition_per_serving %}
+        {% if n %}
+        <div class="recipe-section nutrition-section">
+            <h3>Nutrition (estimate)</h3>
+            <p class="nutrition-batch-intro"><strong>Per serving</strong> for this plan entry (you have <strong>{{ meal_details.meal.servings }}</strong> serving{% if meal_details.meal.servings != 1 %}s{% endif %} planned).</p>
+            <div class="nutrition-grid">
+                {% if n.calories_kcal is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ n.calories_kcal|round(0, 'common')|int }}</span><span class="nutrition-stat-label">kcal / serving</span></div>{% endif %}
+                {% if n.protein_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ n.protein_g }}</span><span class="nutrition-stat-label">protein (g) / serving</span></div>{% endif %}
+                {% if n.carbs_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ n.carbs_g }}</span><span class="nutrition-stat-label">carbs (g) / serving</span></div>{% endif %}
+                {% if n.fat_g is not none %}<div class="nutrition-stat"><span class="nutrition-stat-value">{{ n.fat_g }}</span><span class="nutrition-stat-label">fat (g) / serving</span></div>{% endif %}
+            </div>
+            <p class="meal-nutrition-disclaimer">Approximate values only — not medical or dietary advice.</p>
+        </div>
+        {% endif %}
+
+        {% if meal_details.recipe.description %}
+        <div class="recipe-section">
+            <h3>Description</h3>
+            <p>{{ meal_details.recipe.description }}</p>
+        </div>
+        {% endif %}
+
+        <div class="recipe-section">
+            <h3>Ingredients</h3>
+            <div class="ingredients-list">
+                {% for ingredient in meal_details.ingredients %}
+                <div class="ingredient-item">
+                    <span class="ingredient-name">{{ ingredient.name }}</span>
+                    <span class="ingredient-quantity">{{ ingredient.quantity }} {{ ingredient.unit }}</span>
+                    <span class="ingredient-category">{{ ingredient.category }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="recipe-section">
+            <h3>Instructions</h3>
+            <div class="instructions">
+                {{ meal_details.recipe.instructions | replace('\n', '<br>') | safe }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

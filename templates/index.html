@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Weekly Meal Plan - Meal Planner{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Weekly Meal Plan</h2>
+        <p class="app-page-subtitle">Plan your meals for the week ahead</p>
+    </div>
+    <div class="app-page-header-actions app-page-header-stack">
+        <div class="week-navigation">
+            <a href="{{ url_for('index', week_start=prev_week.isoformat()) }}" class="btn btn-secondary">← Previous</a>
+            <span class="week-date">{{ week_start_date.strftime('%B %d, %Y') }}</span>
+            <a href="{{ url_for('index', week_start=next_week.isoformat()) }}" class="btn btn-secondary">Next →</a>
+        </div>
+        <form method="post" action="{{ url_for('copy_week') }}" class="inline-form"
+              onsubmit="return confirm('Copy meals from last week into empty slots this week?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="source_week" value="{{ prev_week.isoformat() }}">
+            <input type="hidden" name="target_week" value="{{ week_start_date.isoformat() }}">
+            <button type="submit" class="btn btn-secondary">Copy last week</button>
+        </form>
+        <a href="{{ url_for('add_meal', week_start=week_start_date.isoformat()) }}" class="btn btn-primary">Add Meal</a>
+    </div>
+</div>
+
+<div class="weekly-calendar">
+    {% set days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] %}
+    {% set meal_types = ['Breakfast', 'Lunch', 'Dinner', 'Snack'] %}
+    
+    {% for day in days %}
+    <div class="day-card {% if day_is_past[day] %}past-day{% endif %}">
+        <h3 class="day-name">{{ day }}</h3>
+        <p class="day-date {% if day_is_past[day] %}past-date{% endif %}">
+            {% if not day_is_past[day] %}
+            <a href="{{ url_for('add_meal', week_start=week_start_date.isoformat(), day=day, plan_date=day_dates[day].isoformat()) }}" class="day-date-link" title="Add meal on {{ day_dates[day].strftime('%B %d, %Y') }}">{{ day_dates[day].strftime('%B %d, %Y') }}</a>
+            {% else %}
+            {{ day_dates[day].strftime('%B %d, %Y') }}
+            {% endif %}
+            {% if day_is_past[day] %}<span class="past-badge">Past</span>{% endif %}
+        </p>
+        <div class="meals-container">
+            {% for meal_type in meal_types %}
+            <div class="meal-slot">
+                <span class="meal-type-label">{{ meal_type }}</span>
+                {% if weekly_plan[day][meal_type] %}
+                    {% set meal = weekly_plan[day][meal_type] %}
+                    <div class="meal-card">
+                        {% if meal.recipe and meal.recipe.image_url %}
+                        <img src="{{ meal.recipe.image_url }}" alt="" class="meal-card-thumb" loading="lazy" referrerpolicy="no-referrer" decoding="async">
+                        {% endif %}
+                        <div class="meal-card-header">
+                            <h4>{{ meal.recipe.name if meal.recipe else 'Unknown Recipe' }}</h4>
+                        </div>
+                        <p class="meal-info">
+                            <span class="meal-info-item">{{ meal.recipe.prep_time + meal.recipe.cook_time if meal.recipe else 0 }} min</span>
+                            <span class="meal-info-item">{{ meal.servings }} servings</span>
+                        </p>
+                        {% set n = meal|meal_nutrition_per_serving %}
+                        {% if n %}
+                        <div class="meal-nutrition" aria-label="Estimated nutrition per serving for this plan entry">
+                            <span class="meal-nutrition-title">Nutrition (est.)</span>
+                            <span class="meal-nutrition-values">
+                                {% if n.calories_kcal is not none %}<span class="nut-pill kcal">{{ n.calories_kcal|round(0, 'common')|int }} kcal</span>{% endif %}
+                                {% if n.protein_g is not none %}<span class="nut-pill">P {{ n.protein_g }}g</span>{% endif %}
+                                {% if n.carbs_g is not none %}<span class="nut-pill">C {{ n.carbs_g }}g</span>{% endif %}
+                                {% if n.fat_g is not none %}<span class="nut-pill">F {{ n.fat_g }}g</span>{% endif %}
+                            </span>
+                            <span class="meal-nutrition-note">per serving · {{ meal.servings }} on your plan · not medical advice</span>
+                        </div>
+                        {% endif %}
+                        <div class="meal-actions">
+                            <a href="{{ url_for('view_meal', meal_id=meal.id) }}" class="btn btn-sm btn-info">View</a>
+                            {% if not day_is_past[day] %}
+                            <button onclick="deleteMeal({{ meal.id }})" class="btn btn-sm btn-danger">Delete</button>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="empty-meal-slot">
+                        {% if day_is_past[day] %}
+                            <span class="past-day-message">Cannot add meals to past dates</span>
+                        {% else %}
+                            <a href="{{ url_for('add_meal', week_start=week_start_date.isoformat(), day=day, meal_type=meal_type, plan_date=day_dates[day].isoformat()) }}" class="btn btn-sm btn-outline">+ Add {{ meal_type }}</a>
+                            <div class="quick-actions quick-actions--center">
+                                <a href="{{ url_for('recipes') }}" class="quick-action-btn" title="Browse recipes">Browse Recipes</a>
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function deleteMeal(mealId) {
+    if (confirm('Are you sure you want to delete this meal?')) {
+        fetch(`/delete_meal/${mealId}`, {
+            method: 'POST',
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (typeof csrfHeaders === 'function' ? csrfHeaders() : {})
+            )
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the meal');
+        });
+    }
+}
+</script>
+{% endblock %}

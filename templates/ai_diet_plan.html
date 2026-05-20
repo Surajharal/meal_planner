@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}AI diet plan{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Make your diet plan with AI</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('ai_diet_plan_history') }}" class="btn btn-secondary">Past plans</a>
+    </div>
+</div>
+
+<p class="ai-diet-intro">
+    Tell us about yourself and your goals. The AI will draft a <strong>general wellness outline</strong> (meals, habits, rough calorie guidance).
+    This is <strong>not medical advice</strong> — always talk to a doctor or dietitian for health conditions.
+</p>
+
+<div class="form-container ai-diet-form-wrap">
+    <form method="post" class="meal-form" data-ai-loading data-ai-loading-message="Generating your diet plan with AI…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="weight_kg">Weight (kg) *</label>
+                <input type="number" step="0.1" id="weight_kg" name="weight_kg" required min="25" max="300"
+                       value="{{ form.get('weight_kg', '') if form else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="height_cm">Height (cm) *</label>
+                <input type="number" step="0.1" id="height_cm" name="height_cm" required min="80" max="250"
+                       value="{{ form.get('height_cm', '') if form else '' }}">
+            </div>
+            <div class="form-group">
+                <label for="age">Age *</label>
+                <input type="number" id="age" name="age" required min="13" max="120"
+                       value="{{ form.get('age', '') if form else '' }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="sex">Sex *</label>
+            <select id="sex" name="sex" required>
+                <option value="">Select…</option>
+                <option value="female" {% if form and form.get('sex') == 'female' %}selected{% endif %}>Female</option>
+                <option value="male" {% if form and form.get('sex') == 'male' %}selected{% endif %}>Male</option>
+                <option value="other" {% if form and form.get('sex') == 'other' %}selected{% endif %}>Other</option>
+                <option value="prefer_not_say" {% if form and form.get('sex') == 'prefer_not_say' %}selected{% endif %}>Prefer not to say</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="goal">Weight goal *</label>
+            <select id="goal" name="goal" required>
+                <option value="">Select…</option>
+                <option value="lose_weight" {% if form and form.get('goal') == 'lose_weight' %}selected{% endif %}>Lose weight</option>
+                <option value="gain_weight" {% if form and form.get('goal') == 'gain_weight' %}selected{% endif %}>Gain weight</option>
+                <option value="maintain" {% if form and form.get('goal') == 'maintain' %}selected{% endif %}>Maintain weight</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="activity_level">Activity level *</label>
+            <select id="activity_level" name="activity_level" required>
+                <option value="">Select…</option>
+                <option value="sedentary" {% if form and form.get('activity_level') == 'sedentary' %}selected{% endif %}>Sedentary</option>
+                <option value="light" {% if form and form.get('activity_level') == 'light' %}selected{% endif %}>Light</option>
+                <option value="moderate" {% if form and form.get('activity_level') == 'moderate' %}selected{% endif %}>Moderate</option>
+                <option value="active" {% if form and form.get('activity_level') == 'active' %}selected{% endif %}>Active</option>
+                <option value="very_active" {% if form and form.get('activity_level') == 'very_active' %}selected{% endif %}>Very active</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="dietary_restrictions">Dietary style / restrictions</label>
+            <textarea id="dietary_restrictions" name="dietary_restrictions" rows="2" maxlength="2000" placeholder="e.g. vegetarian, halal, low carb…">{{ form.get('dietary_restrictions', '') if form else '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="allergies">Allergies (foods to avoid)</label>
+            <textarea id="allergies" name="allergies" rows="2" maxlength="2000" placeholder="e.g. peanuts, shellfish…">{{ form.get('allergies', '') if form else '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="extra_notes">Anything else we should know</label>
+            <textarea id="extra_notes" name="extra_notes" rows="3" maxlength="2000" placeholder="Schedule, budget, foods you dislike…">{{ form.get('extra_notes', '') if form else '' }}</textarea>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Generate my plan</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}AI diet plan · details{% endblock %}
+
+{% block content %}
+<div class="app-page-header">
+    <div class="app-page-header-main">
+        <h2 class="app-page-title">Your AI diet outline</h2>
+    </div>
+    <div class="app-page-header-actions">
+        <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">Weekly plan</a>
+        <a href="{{ url_for('ai_diet_plan_history') }}" class="btn btn-secondary">← History</a>
+        <form method="post" action="{{ url_for('ai_diet_plan_delete', plan_id=plan.id) }}" class="inline-form"
+              onsubmit="return confirm('Delete this AI diet plan permanently?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-danger">Delete plan</button>
+        </form>
+    </div>
+</div>
+
+{% if show_new_prompt %}
+<div class="diet-week-prompt-banner">
+    <p class="diet-week-prompt-lead"><strong>Your plan is ready.</strong> Add AI-generated meals to your weekly calendar?</p>
+    <p class="diet-week-prompt-note">We fill <strong>empty</strong> slots for today and later only. Each slot gets a full new recipe (no photos during bulk add — faster). A full week of dinners and lunches may take <strong>2–5 minutes</strong>.</p>
+    <div class="diet-week-prompt-actions">
+        <form method="post" action="{{ url_for('ai_diet_plan_apply_week', plan_id=plan.id) }}" class="diet-apply-week-form diet-apply-week-form--compact" data-ai-loading data-ai-loading-message="Generating recipes for your week… This may take a few minutes.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% include '_diet_apply_fields.html' %}
+            <button type="submit" class="btn btn-primary">Yes, add meals</button>
+        </form>
+        <a href="{{ url_for('ai_diet_plan_detail', plan_id=plan.id) }}" class="btn btn-secondary">Not now</a>
+    </div>
+</div>
+{% endif %}
+
+{% if show_fill_remaining %}
+<div class="diet-week-prompt-banner diet-fill-remaining-banner">
+    <p class="diet-week-prompt-lead"><strong>Some slots are still empty.</strong> Run again to fill the rest (same week and rules).</p>
+    <form method="post" action="{{ url_for('ai_diet_plan_apply_week', plan_id=plan.id) }}" class="diet-apply-week-form diet-apply-week-form--compact" data-ai-loading data-ai-loading-message="Filling remaining empty slots…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% include '_diet_apply_fields.html' %}
+        <button type="submit" class="btn btn-primary">Fill remaining slots</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="meal-details-container">
+    <div class="recipe-meta" style="margin-bottom:1rem;flex-wrap:wrap;">
+        <span class="meta-item">Age {{ plan.age }}</span>
+        <span class="meta-item">{{ "%.1f"|format(plan.weight_kg) }} kg</span>
+        <span class="meta-item">{{ "%.1f"|format(plan.height_cm) }} cm</span>
+        <span class="meta-item">Goal: {{ plan.goal.replace('_', ' ') }}</span>
+        <span class="meta-item">Activity: {{ plan.activity_level.replace('_', ' ') }}</span>
+        <span class="meta-item">{{ plan.created_at.strftime('%B %d, %Y') if plan.created_at else '' }}</span>
+    </div>
+    {% if plan.dietary_restrictions %}
+    <p style="margin-bottom:0.5rem;color:#555;"><strong>Restrictions:</strong> {{ plan.dietary_restrictions }}</p>
+    {% endif %}
+    {% if plan.allergies %}
+    <p style="margin-bottom:1rem;color:#555;"><strong>Allergies:</strong> {{ plan.allergies }}</p>
+    {% endif %}
+
+    <div class="diet-apply-week-card">
+        <h3 class="diet-apply-week-title">Weekly meal calendar</h3>
+        <p class="diet-apply-week-desc">Generate recipes into empty slots using this diet profile. Images are skipped during bulk add for speed; use <strong>Recipes → backfill</strong> or open a recipe later for photos.</p>
+        <form method="post" action="{{ url_for('ai_diet_plan_apply_week', plan_id=plan.id) }}" class="diet-apply-week-form" data-ai-loading data-ai-loading-message="Generating recipes for your week… This may take a few minutes.">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% include '_diet_apply_fields.html' %}
+            <button type="submit" class="btn btn-primary">Add suggested meals to this week</button>
+        </form>
+    </div>
+
+    <div class="diet-plan-body">{{ plan.generated_plan }}</div>
+</div>
+{% endblock %}

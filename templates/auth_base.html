@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{% block title %}Sign in - Meal Planner{% endblock %}</title>
+    <script>
+    (function () {
+        try {
+            var t = localStorage.getItem("mealplanner-theme");
+            if (t === "dark" || t === "light") {
+                document.documentElement.setAttribute("data-theme", t);
+            }
+        } catch (e) { /* ignore */ }
+    })();
+    </script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-overrides.css') }}">
+</head>
+<body class="auth-body">
+    <header class="auth-topbar">
+        <a href="{{ url_for('login') }}" class="auth-topbar-brand">Meal Planner</a>
+        <button type="button" class="theme-toggle-btn auth-theme-toggle" id="theme-toggle-btn" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+    </header>
+    <div class="auth-shell">
+        {% if session_cookie_blocked_over_http %}
+        <div class="flash-messages auth-flash" role="alert">
+            <div class="flash-message flash-error">
+                Sign-up and login need a saved session. On a phone using <strong>http://</strong> (e.g. your computer’s IP address),
+                turn off secure cookies in <code>.env</code>: <code>SESSION_COOKIE_SECURE=false</code>, then restart Docker.
+                Or use <strong>https://</strong> with the Caddy profile. On Mac, <code>localhost</code> can work even with secure cookies; phones cannot.
+            </div>
+        </div>
+        {% endif %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages auth-flash" role="status">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

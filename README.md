@@ -417,6 +417,7 @@ vercel dev
 | Vercel missing CSS | Re-deploy (build runs `scripts/sync_static.py`); check `public/static/` exists after build |
 | AI timeout on Vercel | Vercel → Settings → Functions → increase max duration; or reduce `DIET_APPLY_MAX_MEALS` |
 | `unmatched-function-pattern` for `app.py` | Remove `vercel.json` `functions` block; ensure Vercel imports **`Surajharal/meal_planner`** (same repo you `git push` to) |
+| `ModuleNotFoundError: No module named 'flask'` | Add dependencies to `pyproject.toml` `[project.dependencies]` (Vercel installs from there) |
 
 ---
 

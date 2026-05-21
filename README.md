@@ -351,7 +351,7 @@ python seed_starter_recipes.py   # optional; no cover images unless you pass --w
 
 1. Push the repo to GitHub and import it at [vercel.com/new](https://vercel.com/new).
 2. Framework: detected as Flask (`app.py`). Root directory: repo root.
-3. Build command is set in `vercel.json` / `pyproject.toml` (`python scripts/sync_static.py`).
+3. Build command is set in `pyproject.toml` (`python scripts/sync_static.py`). Do not add `functions.app.py` to `vercel.json` (Flask is zero-config).
 
 ### 3. Environment variables (Production)
 
@@ -416,7 +416,7 @@ vercel dev
 | Vercel 500 / DB errors | Set `DATABASE_URL` to Neon URL with `sslmode=require`; run `migrate_db.py` once |
 | Vercel missing CSS | Re-deploy (build runs `scripts/sync_static.py`); check `public/static/` exists after build |
 | AI timeout on Vercel | Vercel → Settings → Functions → increase max duration; or reduce `DIET_APPLY_MAX_MEALS` |
-| `unmatched-function-pattern` for `app.py` | Remove `functions.app.py` from `vercel.json` (Flask is zero-config, not `api/`) |
+| `unmatched-function-pattern` for `app.py` | Remove `vercel.json` `functions` block; ensure Vercel imports **`Surajharal/meal_planner`** (same repo you `git push` to) |
 
 ---
 

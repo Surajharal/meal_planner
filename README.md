@@ -389,7 +389,7 @@ Or push to `main` for automatic deploys.
 curl -sS "https://YOUR-PROJECT.vercel.app/health"
 ```
 
-Open the site, test `/login/admin`, signup OTP, and one AI recipe. On the Hobby plan, long Gemini batches may hit the function timeout; Pro + `maxDuration` in `vercel.json` allows up to 60s.
+Open the site, test `/login/admin`, signup OTP, and one AI recipe. For longer AI runs, raise **Function Max Duration** in Vercel → Project → Settings → Functions (Flask does not use `api/` routes in `vercel.json`).
 
 ### Local Vercel preview
 
@@ -415,7 +415,8 @@ vercel dev
 | DB connection in Docker | Ensure `db` is healthy; `DB_HOST=db` is set in Compose for `web` |
 | Vercel 500 / DB errors | Set `DATABASE_URL` to Neon URL with `sslmode=require`; run `migrate_db.py` once |
 | Vercel missing CSS | Re-deploy (build runs `scripts/sync_static.py`); check `public/static/` exists after build |
-| AI timeout on Vercel | Hobby 10s limit; upgrade plan or reduce `DIET_APPLY_MAX_MEALS` |
+| AI timeout on Vercel | Vercel → Settings → Functions → increase max duration; or reduce `DIET_APPLY_MAX_MEALS` |
+| `unmatched-function-pattern` for `app.py` | Remove `functions.app.py` from `vercel.json` (Flask is zero-config, not `api/`) |
 
 ---
 

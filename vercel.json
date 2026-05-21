@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "python scripts/sync_static.py",
+  "functions": {
+    "app.py": {
+      "maxDuration": 60
+    }
+  }
+}

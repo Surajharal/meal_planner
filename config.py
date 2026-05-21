@@ -22,6 +22,28 @@ def _is_production_env() -> bool:
     )
 
 
+def _normalize_database_url(url: str) -> str:
+    """Neon/Vercel often provide postgres://; SQLAlchemy expects postgresql://."""
+    u = url.strip()
+    if u.startswith("postgres://"):
+        return "postgresql://" + u[len("postgres://") :]
+    return u
+
+
+def _database_url_from_env() -> str:
+    return (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "").strip()
+
+
+def _resolve_trust_proxy() -> bool:
+    raw = (os.getenv("TRUST_PROXY") or "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off"):
+        return False
+    # Vercel terminates TLS at the edge
+    return os.getenv("VERCEL", "").strip() == "1"
+
+
 def _resolve_print_otp_to_console() -> bool:
     """
     Console / on-page OTP (never used in production — forces real SMTP).
@@ -46,16 +68,21 @@ def _resolve_print_otp_to_console() -> bool:
 class Config:
     # API key from .env file
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
-    
-    # PostgreSQL database configuration
+
+    # Neon / Vercel Postgres: single connection string (preferred on serverless)
+    DATABASE_URL = _normalize_database_url(_database_url_from_env()) if _database_url_from_env() else ''
+
+    # PostgreSQL database configuration (when DATABASE_URL is not set)
     DB_HOST = os.getenv('DB_HOST', 'localhost')
     DB_PORT = os.getenv('DB_PORT', '5432')
     DB_NAME = os.getenv('DB_NAME', 'meal_planner')
     DB_USER = os.getenv('DB_USER', 'postgres')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-    
-    # Use SQLite as fallback if PostgreSQL credentials not provided
-    USE_POSTGRES = os.getenv('USE_POSTGRES', 'false').lower() == 'true'
+
+    # Use SQLite as fallback unless Postgres is configured
+    USE_POSTGRES = (
+        os.getenv('USE_POSTGRES', 'false').lower() == 'true' or bool(DATABASE_URL)
+    )
     DATABASE_PATH = 'meal_planner.db'  # SQLite fallback
     
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-for-local-use')
@@ -97,13 +124,8 @@ class Config:
     SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'false').lower() == 'true'
     PRINT_OTP_TO_CONSOLE = _resolve_print_otp_to_console()
 
-    # Set true when Flask sits behind nginx/Caddy/etc. (HTTPS at the edge).
-    TRUST_PROXY = os.getenv("TRUST_PROXY", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    # Set true when Flask sits behind nginx/Caddy/Vercel (HTTPS at the edge).
+    TRUST_PROXY = _resolve_trust_proxy()
 
     # Optional: auto / batch stock food photos for recipes (https://www.pexels.com/api/)
     PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "").strip()
@@ -126,25 +148,36 @@ class Config:
     def get_database_url():
         """Get the database connection URL"""
         if Config.USE_POSTGRES:
+            if Config.DATABASE_URL:
+                return Config.DATABASE_URL
+
             if not Config.DB_PASSWORD:
-                raise ValueError("DB_PASSWORD is required when using PostgreSQL")
-            
+                raise ValueError(
+                    "DB_PASSWORD is required when using PostgreSQL without DATABASE_URL"
+                )
+
             # Validate that values don't contain @ which would break the connection string
             if '@' in Config.DB_USER or '@' in Config.DB_HOST:
                 raise ValueError("DB_USER and DB_HOST cannot contain '@' character")
-            
+
             # URL encode username and password to handle special characters
             encoded_user = quote_plus(Config.DB_USER)
             encoded_password = quote_plus(Config.DB_PASSWORD)
             encoded_host = Config.DB_HOST  # Host shouldn't need encoding typically
             encoded_db = quote_plus(Config.DB_NAME)
-            
-            connection_url = f"postgresql://{encoded_user}:{encoded_password}@{encoded_host}:{Config.DB_PORT}/{encoded_db}"
-            
+
+            connection_url = (
+                f"postgresql://{encoded_user}:{encoded_password}@"
+                f"{encoded_host}:{Config.DB_PORT}/{encoded_db}"
+            )
+
             # Debug: print connection string without password (for troubleshooting)
-            debug_url = f"postgresql://{encoded_user}:***@{encoded_host}:{Config.DB_PORT}/{encoded_db}"
+            debug_url = (
+                f"postgresql://{encoded_user}:***@{encoded_host}:"
+                f"{Config.DB_PORT}/{encoded_db}"
+            )
             print(f"Connecting to PostgreSQL: {debug_url}")
-            
+
             return connection_url
         else:
             return f"sqlite:///{Config.DATABASE_PATH}"
@@ -156,7 +189,9 @@ class Config:
             raise ValueError("GEMINI_API_KEY not found in .env file. Please add your Gemini API key to .env file.")
         
         if Config.USE_POSTGRES:
-            if not Config.DB_PASSWORD:
-                raise ValueError("DB_PASSWORD is required when using PostgreSQL (USE_POSTGRES=true)")
-        
+            if not Config.DATABASE_URL and not Config.DB_PASSWORD:
+                raise ValueError(
+                    "Set DATABASE_URL (Neon) or DB_PASSWORD when USE_POSTGRES=true"
+                )
+
         return True

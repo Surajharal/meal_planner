@@ -137,7 +137,8 @@ Copy `.env.docker.example` to `.env`. Never commit `.env`.
 | `GEMINI_API_KEY` | **Required** for AI features |
 | `SECRET_KEY` | Flask session signing (long random string in production) |
 | `USE_POSTGRES` | `true` for PostgreSQL, `false` for SQLite |
-| `DB_*` | PostgreSQL connection |
+| `DATABASE_URL` | Full Postgres URL (Neon / Vercel); auto-enables Postgres |
+| `DB_*` | PostgreSQL connection when `DATABASE_URL` is not set |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin account (`/login/admin`) |
 | `SMTP_*` | Signup OTP email |
 | `SIGNUP_OTP_EMAIL_ONLY` | `false` + `PRINT_OTP_TO_CONSOLE=true` for dev OTP on screen |
@@ -323,6 +324,85 @@ See `static/manifest.json` for app name and standalone display mode.
 
 ---
 
+## Deploy on Vercel (Neon PostgreSQL)
+
+The app runs as a [Flask backend on Vercel](https://vercel.com/docs/frameworks/backend/flask). Static assets are copied to `public/static/` during the build (`scripts/sync_static.py`). Use **Neon** (or any hosted Postgres) — SQLite does not work on Vercel.
+
+### 1. Neon database
+
+1. Create a project at [neon.tech](https://neon.tech).
+2. Copy the connection string (Dashboard → **Connect**). Prefer the string with `?sslmode=require`.
+3. Run migrations once from your machine (replace the URL):
+
+```bash
+cd "Meal Planner"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+export DATABASE_URL="postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+export GEMINI_API_KEY="your-gemini-key"
+
+python migrate_db.py
+python seed_starter_recipes.py   # optional
+```
+
+### 2. Vercel project
+
+1. Push the repo to GitHub and import it at [vercel.com/new](https://vercel.com/new).
+2. Framework: detected as Flask (`app.py`). Root directory: repo root.
+3. Build command is set in `vercel.json` / `pyproject.toml` (`python scripts/sync_static.py`).
+
+### 3. Environment variables (Production)
+
+| Variable | Example / notes |
+|----------|-----------------|
+| `ENV` | `production` |
+| `DATABASE_URL` | Neon connection string (`postgresql://...?sslmode=require`) |
+| `GEMINI_API_KEY` | Required |
+| `SECRET_KEY` | Long random string (`openssl rand -hex 32`) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Admin login at `/login/admin` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | Signup OTP |
+| `SMTP_USE_TLS` | `true` |
+| `SIGNUP_OTP_EMAIL_ONLY` | `true` |
+
+Optional: `PEXELS_API_KEY`, `ADMIN_EMAIL`, `RATELIMIT_STORAGE_URI` (Redis/Upstash at scale).
+
+`TRUST_PROXY` defaults to **true** on Vercel (`VERCEL=1`). `USE_POSTGRES` is inferred when `DATABASE_URL` is set.
+
+Do not commit `.env`; set values only in the Vercel dashboard.
+
+### 4. Deploy
+
+```bash
+cd "Meal Planner"
+npm i -g vercel
+vercel login
+vercel --prod
+```
+
+Or push to `main` for automatic deploys.
+
+### 5. Verify
+
+```bash
+curl -sS "https://YOUR-PROJECT.vercel.app/health"
+```
+
+Open the site, test `/login/admin`, signup OTP, and one AI recipe. On the Hobby plan, long Gemini batches may hit the function timeout; Pro + `maxDuration` in `vercel.json` allows up to 60s.
+
+### Local Vercel preview
+
+```bash
+python scripts/sync_static.py
+export DATABASE_URL="your-neon-url"
+export GEMINI_API_KEY="your-key"
+export ENV=production
+vercel dev
+```
+
+---
+
 ## Troubleshooting
 
 | Issue | What to try |
@@ -333,6 +413,9 @@ See `static/manifest.json` for app name and standalone display mode.
 | Empty recipe library | `docker compose exec web python seed_starter_recipes.py` (only if no recipes exist) |
 | Diet apply slow / partial week | Normal for many slots; use “Fill remaining”; check Gemini quota flashes |
 | DB connection in Docker | Ensure `db` is healthy; `DB_HOST=db` is set in Compose for `web` |
+| Vercel 500 / DB errors | Set `DATABASE_URL` to Neon URL with `sslmode=require`; run `migrate_db.py` once |
+| Vercel missing CSS | Re-deploy (build runs `scripts/sync_static.py`); check `public/static/` exists after build |
+| AI timeout on Vercel | Hobby 10s limit; upgrade plan or reduce `DIET_APPLY_MAX_MEALS` |
 
 ---
 

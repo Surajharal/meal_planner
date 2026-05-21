@@ -14,3 +14,4 @@ ENV/
 *.log
 .DS_Store
 instance/
+public/static/

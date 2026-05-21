@@ -39,6 +39,6 @@ def test_ensure_starter_recipes_idempotent():
             .filter((Recipe.image_url.is_(None)) | (Recipe.image_url == ""))
             .count()
         )
-        assert without_image == 0
+        assert without_image == 80
     finally:
         db.close()

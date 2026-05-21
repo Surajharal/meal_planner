@@ -486,10 +486,13 @@ def _starter_description(spec: Dict[str, Any]) -> str:
     return prefix + (spec.get("description") or "")
 
 
-def ensure_starter_recipes(db: Session) -> int:
+def ensure_starter_recipes(db: Session, *, assign_thumbnails: bool = False) -> int:
     """
     Insert starter recipes when the library is empty.
     Returns number of recipes created (0 if already seeded).
+
+    assign_thumbnails: when False (default), skip Pexels/cuisine cover images.
+    Run backfill_recipe_images.py later when you want images.
     """
     if db.query(Recipe).count() > 0:
         return 0
@@ -518,15 +521,16 @@ def ensure_starter_recipes(db: Session) -> int:
                 unit=ing.get("unit", "unit"),
                 category=ing.get("category", "other"),
             )
-        full = (
-            db.query(Recipe)
-            .options(
-                joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient)
+        if assign_thumbnails:
+            full = (
+                db.query(Recipe)
+                .options(
+                    joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient)
+                )
+                .filter(Recipe.id == recipe.id)
+                .one()
             )
-            .filter(Recipe.id == recipe.id)
-            .one()
-        )
-        assign_recipe_thumbnail(db, full)
+            assign_recipe_thumbnail(db, full)
         created += 1
 
     logger.info(

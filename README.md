@@ -90,10 +90,10 @@ In `.env` set `TRUST_PROXY=true` and `SESSION_COOKIE_SECURE=true`, then open **h
 # DB shell (default DB name/user from .env)
 docker compose exec db psql -U meal_planer -d meal_planer
 
-# Re-seed starter recipes (only if recipe table is empty)
+# Re-seed starter recipes (only if recipe table is empty; fast, no images)
 docker compose exec web python seed_starter_recipes.py
 
-# Backfill recipe cover images
+# Optional: assign cover images later (needs PEXELS_API_KEY for search)
 docker compose exec web python backfill_recipe_images.py
 ```
 
@@ -344,7 +344,7 @@ export DATABASE_URL="postgresql://USER:PASS@ep-xxx.region.aws.neon.tech/neondb?s
 export GEMINI_API_KEY="your-gemini-key"
 
 python migrate_db.py
-python seed_starter_recipes.py   # optional
+python seed_starter_recipes.py   # optional; no cover images unless you pass --with-images
 ```
 
 ### 2. Vercel project

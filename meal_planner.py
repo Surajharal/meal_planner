@@ -435,6 +435,7 @@ class MealPlanner:
                     )
                     added += 1
                 except Exception as ex:
+                    self.db.rollback()
                     errors.append(f"{row['day']} {row['meal_type']}: {ex}")
 
         plan_grid_after = self.get_weekly_plan(user_id, week_start_date)

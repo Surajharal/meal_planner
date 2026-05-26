@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from database import get_week_start_date
 from meal_planner import MealPlanner, _collect_empty_diet_slots
-from models import Meal, Recipe, SessionLocal, User, init_db
+from models import Meal, Recipe, RecipeIngredient, SessionLocal, User, init_db
 from werkzeug.security import generate_password_hash
 
 
@@ -105,6 +105,83 @@ def test_apply_diet_profile_skips_thumbnails():
                 )
         assert result["added"] == 1
         mock_thumb.assert_not_called()
+    finally:
+        db.query(Meal).delete()
+        db.query(Recipe).delete()
+        db.query(User).delete()
+        db.commit()
+        db.close()
+
+
+def test_apply_diet_profile_shortens_long_ai_units():
+    init_db()
+    db = SessionLocal()
+    try:
+        user = User(
+            username="longunit@example.com",
+            password_hash=generate_password_hash("secret"),
+            email="longunit@example.com",
+            role="gyama",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        week = get_week_start_date(date.today())
+        planner = MealPlanner(db)
+        profile = {
+            "age": 30,
+            "sex": "female",
+            "weight_kg": 65,
+            "height_cm": 165,
+            "goal": "maintain",
+            "activity_level": "moderate",
+        }
+        slot = {"day": "Friday", "meal_type": "Dinner"}
+        if week + timedelta(days=4) < date.today():
+            slot = {"day": "Sunday", "meal_type": "Dinner"}
+        fake_recipe = {
+            "name": "Chickpea Bowl",
+            "description": "Test",
+            "instructions": "Cook.",
+            "prep_time": 5,
+            "cook_time": 10,
+            "servings": 4,
+            "ingredients": [
+                {
+                    "name": "Canned Chickpeas",
+                    "quantity": 1,
+                    "unit": "can (400g/15oz), drained and rinsed",
+                    "category": "legumes",
+                }
+            ],
+        }
+
+        with patch.object(
+            planner.gemini,
+            "generate_full_recipes_for_plan_slots",
+            return_value=[
+                {"day": slot["day"], "meal_type": slot["meal_type"], "recipe": fake_recipe}
+            ],
+        ):
+            result = planner.apply_diet_profile_to_empty_week(
+                profile,
+                week,
+                user.id,
+                max_meals=1,
+                meal_types=["Dinner"],
+                assign_thumbnail=False,
+            )
+
+        assert result["added"] == 1
+        recipe_ingredient = (
+            db.query(RecipeIngredient)
+            .join(Recipe)
+            .filter(Recipe.name == "Chickpea Bowl")
+            .first()
+        )
+        assert recipe_ingredient.unit == "can"
+        assert recipe_ingredient.ingredient.default_unit == "can"
     finally:
         db.query(Meal).delete()
         db.query(Recipe).delete()

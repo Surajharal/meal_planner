@@ -308,7 +308,13 @@ def register_role_routes(app):
                 )
             return redirect(url_for("index", week_start=week_start_date.isoformat()))
         except ValueError as e:
+            db.rollback()
             flash(str(e), "error")
+            return redirect(url_for("ai_diet_plan_detail", plan_id=plan_id))
+        except Exception:
+            db.rollback()
+            logger.exception("AI diet apply-week failed")
+            flash("Could not add meals from this diet plan. Please try again.", "error")
             return redirect(url_for("ai_diet_plan_detail", plan_id=plan_id))
         finally:
             db.close()

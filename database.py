@@ -16,6 +16,40 @@ from models import (
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Optional
 
+_MAX_INGREDIENT_NAME_LEN = 100
+_MAX_INGREDIENT_CATEGORY_LEN = 50
+_MAX_INGREDIENT_UNIT_LEN = 20
+
+
+def _clean_short_text(value, default: str, max_length: int) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).replace("<", "").replace(">", "").strip()
+    return (cleaned[:max_length] if cleaned else default)
+
+
+def normalize_ingredient_unit(value) -> str:
+    """Keep AI-generated units inside the DB column while dropping prep notes."""
+    raw = _clean_short_text(value, "unit", 200)
+    unit = re.split(r"[,;(]", raw, maxsplit=1)[0].strip() or raw
+    if len(unit) > _MAX_INGREDIENT_UNIT_LEN:
+        words = unit.split()
+        shortened = ""
+        for word in words:
+            candidate = f"{shortened} {word}".strip()
+            if len(candidate) > _MAX_INGREDIENT_UNIT_LEN:
+                break
+            shortened = candidate
+        unit = shortened or unit[:_MAX_INGREDIENT_UNIT_LEN]
+    return _clean_short_text(unit, "unit", _MAX_INGREDIENT_UNIT_LEN)
+
+
+def normalize_ingredient_name(value) -> str:
+    return _clean_short_text(value, "Ingredient", _MAX_INGREDIENT_NAME_LEN)
+
+
+def normalize_ingredient_category(value) -> str:
+    return _clean_short_text(value, "other", _MAX_INGREDIENT_CATEGORY_LEN)
+
+
 def get_week_start_date(target_date: date = None) -> date:
     """Get the Monday of the week for the given date"""
     if target_date is None:
@@ -25,6 +59,9 @@ def get_week_start_date(target_date: date = None) -> date:
 
 def get_or_create_ingredient(db: Session, name: str, category: str, default_unit: str = 'unit') -> Ingredient:
     """Get existing ingredient or create new one"""
+    name = normalize_ingredient_name(name)
+    category = normalize_ingredient_category(category)
+    default_unit = normalize_ingredient_unit(default_unit)
     ingredient = db.query(Ingredient).filter(Ingredient.name == name).first()
     if not ingredient:
         ingredient = Ingredient(name=name, category=category, default_unit=default_unit)
@@ -71,6 +108,9 @@ def create_recipe(
 def add_ingredient_to_recipe(db: Session, recipe_id: int, ingredient_name: str,
                              quantity: float, unit: str, category: str) -> RecipeIngredient:
     """Add an ingredient to a recipe"""
+    ingredient_name = normalize_ingredient_name(ingredient_name)
+    category = normalize_ingredient_category(category)
+    unit = normalize_ingredient_unit(unit)
     ingredient = get_or_create_ingredient(db, ingredient_name, category, unit)
     
     recipe_ingredient = RecipeIngredient(

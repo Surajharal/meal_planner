@@ -5,8 +5,10 @@ from database import (
     create_meal,
     get_weekly_meals,
     get_meal_by_id_for_user,
+    get_accessible_recipe_by_id,
     get_recipe_by_id,
     get_or_create_ingredient,
+    create_recipe_from_ai_data,
     replace_recipe_from_ai_data,
 )
 from gemini_service import GeminiService
@@ -245,7 +247,7 @@ class MealPlanner:
         week_start_date: date = None,
     ) -> Dict:
         """Add an existing recipe to a meal plan"""
-        recipe = get_recipe_by_id(self.db, recipe_id)
+        recipe = get_accessible_recipe_by_id(self.db, recipe_id, user_id)
         if not recipe:
             raise ValueError(f"Recipe with ID {recipe_id} not found")
         
@@ -519,5 +521,36 @@ class MealPlanner:
             if updated:
                 assign_recipe_thumbnail(self.db, updated)
             return updated, None
+        except Exception as exc:
+            return None, str(exc)
+
+    def regenerate_private_recipe(
+        self, recipe_id: int, user_id: int, tweak: str = ""
+    ) -> Tuple[Optional[object], Optional[str]]:
+        """AI-regenerate a recipe into a private copy for this user."""
+        source = get_accessible_recipe_by_id(self.db, recipe_id, user_id)
+        if not source:
+            return None, "Recipe not found"
+        try:
+            recipe_data = self.gemini.regenerate_recipe(
+                source.name,
+                meal_type="dinner",
+                servings=source.servings or 4,
+                tweak=tweak or "",
+            )
+            private_recipe = create_recipe_from_ai_data(
+                self.db,
+                recipe_data,
+                user_id=user_id,
+                fallback_name=source.name,
+                fallback_servings=source.servings or 4,
+            )
+            if source.image_url and not private_recipe.image_url:
+                private_recipe.image_url = source.image_url
+                self.db.commit()
+                self.db.refresh(private_recipe)
+            else:
+                assign_recipe_thumbnail(self.db, private_recipe)
+            return private_recipe, None
         except Exception as exc:
             return None, str(exc)

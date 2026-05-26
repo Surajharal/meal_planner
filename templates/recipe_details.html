@@ -7,6 +7,9 @@
     <div class="app-page-header-main">
         <h2 class="app-page-title">{{ recipe_details.recipe.name }}</h2>
         <div class="app-page-header-meta">
+            {% if recipe_details.recipe.user_id %}
+            <span class="recipe-cuisine-badge">Private recipe</span>
+            {% endif %}
             <button type="button" class="favorite-btn-large {% if recipe_favorited %}favorited{% endif %}"
                     onclick="toggleFavorite({{ recipe_details.recipe.id }}, this)"
                     title="{% if recipe_favorited %}Remove from favorites{% else %}Add to favorites{% endif %}">
@@ -42,7 +45,7 @@
 
         <div class="recipe-regenerate-panel app-notice">
             <h3 class="app-section-title" style="margin-bottom:0.5rem;">Regenerate with AI</h3>
-            <p class="form-hint" style="margin-bottom:0.75rem;">Updates this <strong>shared</strong> recipe for everyone. Optional tweaks below.</p>
+            <p class="form-hint" style="margin-bottom:0.75rem;">Creates a <strong>private copy</strong> only you can access. Optional tweaks below.</p>
             <div class="form-row" style="align-items:flex-end;">
                 <div class="form-group" style="flex:1;margin:0;">
                     <label for="recipe-regenerate-tweak">Adjustments (optional)</label>
@@ -121,42 +124,42 @@
     var input = document.getElementById('recipe-image-url');
     var saveBtn = document.getElementById('recipe-image-save');
     var clearBtn = document.getElementById('recipe-image-clear');
-    if (!input || !saveBtn) return;
-
-    saveBtn.addEventListener('click', function () {
-        post('/recipe/' + id + '/image', { image_url: input.value.trim() })
-            .then(function (res) {
-                if (res.ok && res.data.success) {
-                    if (typeof showToast === 'function') showToast(res.data.message, 'success');
-                    window.location.reload();
-                } else {
-                    if (typeof showToast === 'function') showToast((res.data && res.data.message) || 'Could not save', 'error');
-                    else alert((res.data && res.data.message) || 'Could not save');
-                }
-            })
-            .catch(function () {
-                if (typeof showToast === 'function') showToast('Network error', 'error');
-            });
-    });
-
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function () {
-            input.value = '';
-            post('/recipe/' + id + '/image', { image_url: '' })
+    if (input && saveBtn) {
+        saveBtn.addEventListener('click', function () {
+            post('/recipe/' + id + '/image', { image_url: input.value.trim() })
                 .then(function (res) {
                     if (res.ok && res.data.success) {
                         if (typeof showToast === 'function') showToast(res.data.message, 'success');
                         window.location.reload();
+                    } else {
+                        if (typeof showToast === 'function') showToast((res.data && res.data.message) || 'Could not save', 'error');
+                        else alert((res.data && res.data.message) || 'Could not save');
                     }
+                })
+                .catch(function () {
+                    if (typeof showToast === 'function') showToast('Network error', 'error');
                 });
         });
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                input.value = '';
+                post('/recipe/' + id + '/image', { image_url: '' })
+                    .then(function (res) {
+                        if (res.ok && res.data.success) {
+                            if (typeof showToast === 'function') showToast(res.data.message, 'success');
+                            window.location.reload();
+                        }
+                    });
+            });
+        }
     }
 
     var regenBtn = document.getElementById('recipe-regenerate-btn');
     var tweakInput = document.getElementById('recipe-regenerate-tweak');
     if (regenBtn) {
         regenBtn.addEventListener('click', function () {
-            if (!confirm('Regenerate this shared recipe with AI? Everyone will see the updated version.')) return;
+            if (!confirm('Regenerate this recipe with AI as your private copy?')) return;
             if (typeof showAiLoading === 'function') showAiLoading('Regenerating recipe with AI…');
             regenBtn.disabled = true;
             post('/recipe/' + id + '/regenerate', { tweak: tweakInput ? tweakInput.value.trim() : '' })

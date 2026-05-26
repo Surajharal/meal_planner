@@ -76,6 +76,9 @@
                 <div class="recipe-card-title-row">
                     <h3>{{ recipe.name }}</h3>
                     <span class="recipe-card-badges">
+                        {% if recipe.user_id %}
+                        <span class="recipe-cuisine-badge">Private</span>
+                        {% endif %}
                         {% set cuisine_label = recipe|recipe_cuisine_label %}
                         {% if cuisine_label %}
                         <span class="recipe-cuisine-badge">{{ cuisine_label }}</span>
@@ -87,7 +90,8 @@
                     </span>
                 </div>
                 <button type="button" class="favorite-btn {% if recipe.id in favorite_recipe_ids %}favorited{% endif %}"
-                        onclick="toggleFavorite({{ recipe.id }}, this)"
+                        data-recipe-id="{{ recipe.id }}"
+                        onclick="toggleFavorite(Number(this.dataset.recipeId), this)"
                         title="{% if recipe.id in favorite_recipe_ids %}Remove from favorites{% else %}Add to favorites{% endif %}">
                     ★
                 </button>

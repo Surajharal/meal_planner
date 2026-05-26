@@ -1,5 +1,6 @@
 import re
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from models import (
     Meal,
@@ -45,9 +46,11 @@ def create_recipe(
     carbs_g: Optional[float] = None,
     fat_g: Optional[float] = None,
     image_url: Optional[str] = None,
+    user_id: Optional[int] = None,
 ) -> Recipe:
     """Create a new recipe"""
     recipe = Recipe(
+        user_id=user_id,
         name=name,
         description=description,
         instructions=instructions,
@@ -138,6 +141,23 @@ def get_recipe_by_id(db: Session, recipe_id: int) -> Optional[Recipe]:
     return db.query(Recipe).filter(Recipe.id == recipe_id).first()
 
 
+def recipe_is_accessible_to_user(recipe: Recipe, user_id: Optional[int]) -> bool:
+    """Shared recipes are public; private recipes are visible only to their owner."""
+    return recipe is not None and (
+        recipe.user_id is None or (user_id is not None and recipe.user_id == user_id)
+    )
+
+
+def get_accessible_recipe_by_id(
+    db: Session, recipe_id: int, user_id: Optional[int]
+) -> Optional[Recipe]:
+    """Get a shared recipe or a private recipe owned by this user."""
+    recipe = get_recipe_by_id(db, recipe_id)
+    if not recipe_is_accessible_to_user(recipe, user_id):
+        return None
+    return recipe
+
+
 def replace_recipe_from_ai_data(db: Session, recipe_id: int, recipe_data: dict) -> Optional[Recipe]:
     """Replace shared recipe content and ingredients from AI JSON."""
     from nutrition import nutrition_fields_from_ai_recipe
@@ -178,6 +198,48 @@ def replace_recipe_from_ai_data(db: Session, recipe_id: int, recipe_data: dict) 
     return recipe
 
 
+def create_recipe_from_ai_data(
+    db: Session,
+    recipe_data: dict,
+    user_id: Optional[int] = None,
+    fallback_name: str = "Recipe",
+    fallback_servings: int = 4,
+) -> Recipe:
+    """Create a shared or user-owned recipe from AI JSON."""
+    from nutrition import nutrition_fields_from_ai_recipe
+
+    instructions = recipe_data.get("instructions", "")
+    if isinstance(instructions, list):
+        instructions = "\n".join(str(step) for step in instructions)
+
+    cal, prot, carb, fat = nutrition_fields_from_ai_recipe(recipe_data)
+    recipe = create_recipe(
+        db,
+        name=recipe_data.get("name") or fallback_name,
+        description=recipe_data.get("description", "") or "",
+        instructions=instructions,
+        prep_time=int(recipe_data.get("prep_time", 0) or 0),
+        cook_time=int(recipe_data.get("cook_time", 0) or 0),
+        servings=int(recipe_data.get("servings", fallback_servings) or fallback_servings),
+        calories_kcal=cal,
+        protein_g=prot,
+        carbs_g=carb,
+        fat_g=fat,
+        user_id=user_id,
+    )
+    for ing in recipe_data.get("ingredients", []):
+        add_ingredient_to_recipe(
+            db,
+            recipe_id=recipe.id,
+            ingredient_name=ing["name"],
+            quantity=ing["quantity"],
+            unit=ing.get("unit", "unit"),
+            category=ing.get("category", "other"),
+        )
+    db.refresh(recipe)
+    return recipe
+
+
 def update_recipe_image_url(
     db: Session, recipe_id: int, image_url: Optional[str]
 ) -> Optional[Recipe]:
@@ -193,6 +255,17 @@ def update_recipe_image_url(
 def get_all_recipes(db: Session) -> List[Recipe]:
     """Get all recipes"""
     return db.query(Recipe).all()
+
+
+def get_accessible_recipes(db: Session, user_id: Optional[int]) -> List[Recipe]:
+    """Get shared recipes plus this user's private recipes."""
+    if user_id is None:
+        return db.query(Recipe).filter(Recipe.user_id.is_(None)).all()
+    return (
+        db.query(Recipe)
+        .filter(or_(Recipe.user_id.is_(None), Recipe.user_id == user_id))
+        .all()
+    )
 
 def search_recipes(db: Session, search_term: str) -> List[Recipe]:
     """Search recipes by name or description"""
@@ -231,7 +304,10 @@ def get_favorite_recipes(db: Session, user_id: int) -> List[Recipe]:
     return (
         db.query(Recipe)
         .join(UserRecipeFavorite, UserRecipeFavorite.recipe_id == Recipe.id)
-        .filter(UserRecipeFavorite.user_id == user_id)
+        .filter(
+            UserRecipeFavorite.user_id == user_id,
+            or_(Recipe.user_id.is_(None), Recipe.user_id == user_id),
+        )
         .order_by(Recipe.name)
         .all()
     )
@@ -251,7 +327,7 @@ def is_recipe_favorite_for_user(db: Session, recipe_id: int, user_id: int) -> bo
 
 def toggle_recipe_favorite(db: Session, recipe_id: int, user_id: int):
     """Toggle this user's star on a shared recipe. Returns (recipe, is_favorite_now)."""
-    recipe = get_recipe_by_id(db, recipe_id)
+    recipe = get_accessible_recipe_by_id(db, recipe_id, user_id)
     if not recipe:
         raise ValueError(f"Recipe with ID {recipe_id} not found")
 

@@ -97,6 +97,7 @@ class Recipe(Base):
     __tablename__ = 'recipes'
     
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text)
     instructions = Column(Text, nullable=False)
@@ -113,6 +114,7 @@ class Recipe(Base):
     # Optional cover image (HTTPS URL); shown on recipe cards and detail page
     image_url = Column(String(512), nullable=True)
 
+    user = relationship("User", backref="private_recipes")
     meals = relationship("Meal", back_populates="recipe")
     ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
 
@@ -192,6 +194,7 @@ def init_db():
             migrate_alpha_to_gyama,
             migrate_drop_legacy_nutrition_tables,
             migrate_recipe_image_url_column,
+            migrate_recipe_user_id_column,
         )
         migrate_add_is_favorite()
         migrate_user_role_column()
@@ -202,6 +205,7 @@ def init_db():
         migrate_alpha_to_gyama()
         migrate_drop_legacy_nutrition_tables()
         migrate_recipe_image_url_column()
+        migrate_recipe_user_id_column()
         db = SessionLocal()
         try:
             ensure_at_least_one_admin(db)

@@ -8,6 +8,8 @@ from shopping_list import ShoppingListGenerator
 from database import (
     add_manual_shopping_item,
     delete_manual_shopping_item,
+    get_accessible_recipe_by_id,
+    get_accessible_recipes,
     get_ingredient_by_id,
     get_manual_shopping_item_for_user,
     get_recipe_by_id,
@@ -16,7 +18,6 @@ from database import (
     update_ingredient_details,
     update_manual_shopping_item,
     delete_meal,
-    get_all_recipes,
     get_week_start_date,
     get_favorite_recipes,
     get_favorite_recipe_ids_for_user,
@@ -410,8 +411,10 @@ def add_meal():
             if is_valid:
                 db_check = SessionLocal()
                 try:
-                    preselected_recipe = get_recipe_by_id(db_check, recipe_id_int)
                     uid = session.get("user_id")
+                    preselected_recipe = get_accessible_recipe_by_id(
+                        db_check, recipe_id_int, uid
+                    )
                     if preselected_recipe and uid:
                         preselected_is_favorite = is_recipe_favorite_for_user(
                             db_check, recipe_id_int, uid
@@ -554,7 +557,7 @@ def add_meal_from_pantry():
                     'message': f'Cannot add meals for past dates. {day} ({day_date.strftime("%B %d, %Y")}) is in the past.',
                 }), 400
 
-            recipe = get_recipe_by_id(db, recipe_id_int)
+            recipe = get_accessible_recipe_by_id(db, recipe_id_int, session["user_id"])
             if not recipe:
                 session.pop('pending_pantry_recipe_id', None)
                 session.pop('pending_pantry_recipe_expiry', None)
@@ -671,7 +674,8 @@ def view_recipe(recipe_id):
     """View detailed recipe information"""
     db = SessionLocal()
     try:
-        recipe = get_recipe_by_id(db, recipe_id)
+        uid = session.get("user_id")
+        recipe = get_accessible_recipe_by_id(db, recipe_id, uid)
         
         if not recipe:
             flash('Recipe not found', 'error')
@@ -689,7 +693,6 @@ def view_recipe(recipe_id):
             for ri in recipe.ingredients
         ]
         
-        uid = session.get("user_id")
         recipe_favorited = (
             is_recipe_favorite_for_user(db, recipe_id, uid) if uid else False
         )
@@ -721,7 +724,7 @@ def recipe_apply_stock_thumbnail(recipe_id):
                     "message": "Stock photos are not configured. Add PEXELS_API_KEY to .env (free at pexels.com/api).",
                 }
             ), 400
-        recipe = get_recipe_by_id(db, recipe_id)
+        recipe = get_accessible_recipe_by_id(db, recipe_id, session.get("user_id"))
         if not recipe:
             return jsonify({"success": False, "message": "Recipe not found"}), 404
         if recipe.image_url:
@@ -772,9 +775,10 @@ def update_recipe_image(recipe_id):
         ok, err, url = validate_optional_recipe_image_url(raw_s)
         if not ok:
             return jsonify({"success": False, "message": err or "Invalid URL"}), 400
-        recipe = update_recipe_image_url(db, recipe_id, url)
+        recipe = get_accessible_recipe_by_id(db, recipe_id, session.get("user_id"))
         if not recipe:
             return jsonify({"success": False, "message": "Recipe not found"}), 404
+        recipe = update_recipe_image_url(db, recipe_id, url)
         return jsonify(
             {
                 "success": True,
@@ -825,7 +829,7 @@ def copy_week():
 @app.route("/recipe/<int:recipe_id>/regenerate", methods=["POST"])
 @limiter.limit("8/minute", methods=["POST"])
 def regenerate_recipe_route(recipe_id):
-    """AI-regenerate a shared recipe (updates for all users)."""
+    """AI-regenerate a recipe into a private copy for the current user."""
     ok_rid, err_rid, recipe_id_int = validate_recipe_id(recipe_id)
     if not ok_rid:
         return jsonify({"success": False, "message": err_rid}), 400
@@ -837,8 +841,11 @@ def regenerate_recipe_route(recipe_id):
 
     db = SessionLocal()
     try:
+        uid = session.get("user_id")
+        if not uid:
+            return jsonify({"success": False, "message": "Authentication required"}), 401
         planner = MealPlanner(db)
-        updated, err = planner.regenerate_shared_recipe(recipe_id_int, tweak)
+        updated, err = planner.regenerate_private_recipe(recipe_id_int, uid, tweak)
         if err or not updated:
             return jsonify(
                 {"success": False, "message": err or "Recipe not found"}
@@ -846,7 +853,7 @@ def regenerate_recipe_route(recipe_id):
         return jsonify(
             {
                 "success": True,
-                "message": "Recipe regenerated. This updates the shared library for everyone.",
+                "message": "Recipe regenerated as your private copy.",
                 "recipe_id": updated.id,
                 "redirect": url_for("view_recipe", recipe_id=updated.id),
             }
@@ -1316,8 +1323,8 @@ def api_recipes():
 
     db = SessionLocal()
     try:
-        recipes_list = get_all_recipes(db)
         uid = session.get("user_id")
+        recipes_list = get_accessible_recipes(db, uid)
         fav_ids = get_favorite_recipe_ids_for_user(db, uid) if uid else set()
         out = []
         for r in recipes_list:
@@ -1442,7 +1449,7 @@ def recipes():
         if show_favorites:
             recipes_list = get_favorite_recipes(db, uid) if uid else []
         else:
-            recipes_list = get_all_recipes(db)
+            recipes_list = get_accessible_recipes(db, uid)
         
         # Apply search filter
         if search_term:
@@ -1473,7 +1480,7 @@ def recipes():
             ]
 
         # Get unique categories for filter dropdown
-        all_recipes = get_all_recipes(db)
+        all_recipes = get_accessible_recipes(db, uid)
         categories = set()
         for recipe in all_recipes:
             for ri in recipe.ingredients:

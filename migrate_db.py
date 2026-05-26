@@ -114,6 +114,30 @@ def migrate_recipe_image_url_column():
         return False
 
 
+def migrate_recipe_user_id_column():
+    """Add recipes.user_id for private per-user regenerated recipes."""
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("recipes"):
+            return True
+        columns = {c["name"] for c in inspector.get_columns("recipes")}
+        if "user_id" in columns:
+            logger.info("Column recipes.user_id already exists")
+            return True
+        with engine.begin() as conn:
+            col_type = "INTEGER"
+            conn.execute(text(f"ALTER TABLE recipes ADD COLUMN user_id {col_type} NULL"))
+            if Config.USE_POSTGRES:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_recipes_user_id ON recipes (user_id)"))
+            else:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_recipes_user_id ON recipes (user_id)"))
+        logger.info("Added recipes.user_id")
+        return True
+    except Exception as e:
+        logger.error("migrate_recipe_user_id_column: %s", e)
+        return False
+
+
 def migrate_recipe_nutrition_columns():
     """Add optional nutrition columns to recipes (AI estimates, totals for full batch)."""
     try:

@@ -8,10 +8,46 @@
         <h2 class="app-page-title">Shopping List</h2>
     </div>
     <div class="app-page-header-actions">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('shopping-add-panel').toggleAttribute('open')">Add Item</button>
         <button type="button" onclick="window.print()" class="btn btn-primary">Print</button>
         <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">← Back to Plan</a>
     </div>
 </div>
+
+<details class="manual-item-panel" id="shopping-add-panel">
+    <summary class="manual-item-summary">Add a custom shopping item</summary>
+    <form action="{{ url_for('add_shopping_item') }}" method="post" class="manual-item-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+
+        <div class="manual-item-field">
+            <label for="shopping-item-name">Item name</label>
+            <input type="text" id="shopping-item-name" name="name" maxlength="100" required placeholder="e.g. Apples">
+        </div>
+
+        <div class="manual-item-field manual-item-field-small">
+            <label for="shopping-item-quantity">Quantity</label>
+            <input type="number" id="shopping-item-quantity" name="quantity" min="0.01" step="any" placeholder="optional">
+        </div>
+
+        <div class="manual-item-field manual-item-field-small">
+            <label for="shopping-item-unit">Unit</label>
+            <input type="text" id="shopping-item-unit" name="unit" maxlength="20" placeholder="optional">
+        </div>
+
+        <div class="manual-item-field">
+            <label for="shopping-item-category">Category</label>
+            <input type="text" id="shopping-item-category" name="category" maxlength="50" list="shopping-category-options" placeholder="produce">
+            <datalist id="shopping-category-options">
+                {% for category in shopping_list.categories %}
+                <option value="{{ category }}">
+                {% endfor %}
+            </datalist>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save to Shopping List</button>
+    </form>
+</details>
 
 <div class="shopping-summary">
     <div class="summary-card">
@@ -32,6 +68,10 @@
             <div class="stat-item stat-warning">
                 <span class="stat-label">Partial Items</span>
                 <span class="stat-value">{{ summary.summary.partial_count }}</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Manual Items</span>
+                <span class="stat-value">{{ summary.summary.manual_count }}</span>
             </div>
         </div>
     </div>
@@ -73,6 +113,8 @@
                                 <span class="item-quantity">{{ item.quantity }} {{ item.unit }}</span>
                                 {% if item.status == 'partial' %}
                                 <span class="item-note">(Have {{ item.available_quantity }} {{ item.unit }})</span>
+                                {% elif item.status == 'manual' %}
+                                <span class="item-note">(Added manually)</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -85,6 +127,44 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% if item.status == 'manual' %}
+                    <div class="manual-item-actions">
+                        <details class="manual-item-edit">
+                            <summary class="btn btn-sm btn-secondary">Edit</summary>
+                            <form action="{{ url_for('update_manual_shopping_item_route', item_id=item.manual_id) }}" method="post" class="manual-item-edit-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+                                <label>
+                                    Name
+                                    <input type="text" name="name" value="{{ item.name }}" maxlength="100" required>
+                                </label>
+                                <label>
+                                    Qty
+                                    <input type="number" name="quantity" value="{{ item.quantity }}" min="0.01" step="any">
+                                </label>
+                                <label>
+                                    Unit
+                                    <input type="text" name="unit" value="{{ item.unit }}" maxlength="20">
+                                </label>
+                                <label>
+                                    Category
+                                    <input type="text" name="category" value="{{ category }}" maxlength="50" list="shopping-category-options">
+                                </label>
+                                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                            </form>
+                        </details>
+                        <form action="{{ url_for('shopping_item_to_inventory', item_id=item.manual_id) }}" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+                            <button type="submit" class="btn btn-sm btn-primary">Add to Inventory</button>
+                        </form>
+                        <form action="{{ url_for('delete_manual_shopping_item_route', item_id=item.manual_id) }}" method="post" onsubmit="return confirm('Delete this shopping item?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+                            <button type="submit" class="btn btn-sm btn-secondary">Delete</button>
+                        </form>
+                    </div>
+                    {% endif %}
                 </li>
                 {% endfor %}
             </ul>

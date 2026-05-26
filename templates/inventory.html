@@ -11,6 +11,41 @@
     <a href="{{ url_for('index', week_start=week_start_date.isoformat()) }}" class="btn btn-secondary">← Back to Plan</a>
 {% endcall %}
 
+<details class="manual-item-panel" id="inventory-add-panel">
+    <summary class="btn btn-primary manual-item-toggle">Add Item</summary>
+    <form action="{{ url_for('add_inventory_item') }}" method="post" class="manual-item-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+
+        <div class="manual-item-field">
+            <label for="inventory-item-name">Item name</label>
+            <input type="text" id="inventory-item-name" name="name" maxlength="100" required placeholder="e.g. Tomatoes">
+        </div>
+
+        <div class="manual-item-field manual-item-field-small">
+            <label for="inventory-item-quantity">Quantity</label>
+            <input type="number" id="inventory-item-quantity" name="quantity" min="0.01" step="any" placeholder="optional">
+        </div>
+
+        <div class="manual-item-field manual-item-field-small">
+            <label for="inventory-item-unit">Unit</label>
+            <input type="text" id="inventory-item-unit" name="unit" maxlength="20" placeholder="optional">
+        </div>
+
+        <div class="manual-item-field">
+            <label for="inventory-item-category">Category</label>
+            <input type="text" id="inventory-item-category" name="category" maxlength="50" list="inventory-category-options" placeholder="vegetables">
+            <datalist id="inventory-category-options">
+                {% for category in categorized.keys()|sort %}
+                <option value="{{ category }}">
+                {% endfor %}
+            </datalist>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save to Inventory</button>
+    </form>
+</details>
+
 <div class="inventory-summary">
     <div class="summary-card">
         <h3 class="app-section-title">Summary</h3>
@@ -108,6 +143,60 @@
         </div>
         {% else %}
         {% call empty_state('No available ingredients', 'Mark ingredients as available to track what you have at home.') %}{% endcall %}
+        {% endif %}
+    </div>
+
+    <div class="inventory-section">
+        <h3 class="app-section-title">Other available inventory</h3>
+        {% if extra_available %}
+        <div class="ingredients-grid">
+            {% for ingredient_id, data in extra_available.items() %}
+            <div class="ingredient-card sufficient">
+                <div class="ingredient-header">
+                    <h4>{{ data.name }}</h4>
+                    <span class="category-badge">{{ data.category }}</span>
+                </div>
+                <div class="ingredient-details">
+                    <p><strong>Available:</strong> {{ data.quantity }} {{ data.unit }}</p>
+                </div>
+                <div class="manual-item-actions">
+                    <details class="manual-item-edit">
+                        <summary class="btn btn-sm btn-secondary">Edit</summary>
+                        <form action="{{ url_for('update_inventory_item', ingredient_id=ingredient_id) }}" method="post" class="manual-item-edit-form">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+                            <input type="hidden" name="previous_unit" value="{{ data.unit }}">
+                            <label>
+                                Name
+                                <input type="text" name="name" value="{{ data.name }}" maxlength="100" required>
+                            </label>
+                            <label>
+                                Qty
+                                <input type="number" name="quantity" value="{{ data.quantity }}" min="0.01" step="any">
+                            </label>
+                            <label>
+                                Unit
+                                <input type="text" name="unit" value="{{ data.unit }}" maxlength="20">
+                            </label>
+                            <label>
+                                Category
+                                <input type="text" name="category" value="{{ data.category }}" maxlength="50" list="inventory-category-options">
+                            </label>
+                            <button type="submit" class="btn btn-sm btn-primary">Save</button>
+                        </form>
+                    </details>
+                    <form action="{{ url_for('delete_inventory_item', ingredient_id=ingredient_id) }}" method="post" onsubmit="return confirm('Remove this inventory item?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="week_start" value="{{ week_start_date.isoformat() }}">
+                        <input type="hidden" name="unit" value="{{ data.unit }}">
+                        <button type="submit" class="btn btn-sm btn-secondary">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        {% call empty_state('No extra inventory', 'Items you add directly will appear here if they are not required by this week\'s plan.') %}{% endcall %}
         {% endif %}
     </div>
 </div>

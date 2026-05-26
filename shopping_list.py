@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from ingredient_manager import IngredientManager
 from typing import Dict, List
 from collections import defaultdict
-from database import get_week_start_date
+from database import get_manual_shopping_items, get_week_start_date
 from delivery_links import delivery_app_home_links, delivery_search_links
 
 class ShoppingListGenerator:
@@ -51,6 +51,22 @@ class ShoppingListGenerator:
                 'available_quantity': data.get('available_quantity', 0),
                 'delivery_links': delivery_search_links(data['name']),
             })
+
+        manual_count = 0
+        for item in get_manual_shopping_items(self.db, user_id, week_start_date):
+            category = item.category or 'other'
+            if category not in shopping_items:
+                shopping_items[category] = []
+
+            shopping_items[category].append({
+                'name': item.name,
+                'quantity': item.quantity,
+                'unit': item.unit,
+                'status': 'manual',
+                'manual_id': item.id,
+                'delivery_links': delivery_search_links(item.name),
+            })
+            manual_count += 1
         
         # Sort categories and items
         sorted_categories = sorted(shopping_items.keys())
@@ -65,6 +81,7 @@ class ShoppingListGenerator:
             'summary': {
                 'missing_count': comparison['missing_count'],
                 'partial_count': comparison['partial_count'],
+                'manual_count': manual_count,
                 'total_required': comparison['required_total']
             }
         }

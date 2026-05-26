@@ -7,6 +7,7 @@ from models import (
     Ingredient,
     RecipeIngredient,
     Inventory,
+    ManualShoppingItem,
     UserRecipeFavorite,
     SessionLocal,
     init_db,
@@ -328,6 +329,113 @@ def get_ingredient_by_id(db: Session, ingredient_id: int) -> Optional[Ingredient
 def get_all_ingredients(db: Session) -> List[Ingredient]:
     """Get all ingredients"""
     return db.query(Ingredient).all()
+
+
+def update_ingredient_details(
+    db: Session,
+    ingredient_id: int,
+    name: str,
+    category: str,
+    default_unit: str,
+) -> Optional[Ingredient]:
+    """Update editable ingredient metadata."""
+    ingredient = get_ingredient_by_id(db, ingredient_id)
+    if not ingredient:
+        return None
+
+    ingredient.name = name
+    ingredient.category = category
+    ingredient.default_unit = default_unit
+    db.commit()
+    db.refresh(ingredient)
+    return ingredient
+
+
+def add_manual_shopping_item(
+    db: Session,
+    user_id: int,
+    name: str,
+    quantity: float,
+    unit: str,
+    category: str,
+    week_start_date: date = None,
+) -> ManualShoppingItem:
+    """Add a user-created item to the weekly shopping list."""
+    if week_start_date is None:
+        week_start_date = get_week_start_date()
+
+    item = ManualShoppingItem(
+        user_id=user_id,
+        name=name,
+        quantity=quantity,
+        unit=unit,
+        category=category,
+        week_start_date=week_start_date,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def get_manual_shopping_items(
+    db: Session,
+    user_id: int,
+    week_start_date: date = None,
+) -> List[ManualShoppingItem]:
+    """Get user-created shopping items for a week."""
+    if week_start_date is None:
+        week_start_date = get_week_start_date()
+
+    return (
+        db.query(ManualShoppingItem)
+        .filter(
+            ManualShoppingItem.user_id == user_id,
+            ManualShoppingItem.week_start_date == week_start_date,
+        )
+        .order_by(ManualShoppingItem.created_at, ManualShoppingItem.id)
+        .all()
+    )
+
+
+def get_manual_shopping_item_for_user(
+    db: Session,
+    item_id: int,
+    user_id: int,
+) -> Optional[ManualShoppingItem]:
+    """Get one user-created shopping item by owner."""
+    return (
+        db.query(ManualShoppingItem)
+        .filter(
+            ManualShoppingItem.id == item_id,
+            ManualShoppingItem.user_id == user_id,
+        )
+        .first()
+    )
+
+
+def update_manual_shopping_item(
+    db: Session,
+    item: ManualShoppingItem,
+    name: str,
+    quantity: float,
+    unit: str,
+    category: str,
+) -> ManualShoppingItem:
+    """Update a user-created shopping item."""
+    item.name = name
+    item.quantity = quantity
+    item.unit = unit
+    item.category = category
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+def delete_manual_shopping_item(db: Session, item: ManualShoppingItem) -> None:
+    """Delete a user-created shopping item."""
+    db.delete(item)
+    db.commit()
 
 
 _NONVEG_NAME_RE = re.compile(

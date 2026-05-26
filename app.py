@@ -6,8 +6,15 @@ from meal_planner import MealPlanner
 from ingredient_manager import IngredientManager
 from shopping_list import ShoppingListGenerator
 from database import (
+    add_manual_shopping_item,
+    delete_manual_shopping_item,
+    get_ingredient_by_id,
+    get_manual_shopping_item_for_user,
     get_recipe_by_id,
+    get_or_create_ingredient,
     update_recipe_image_url,
+    update_ingredient_details,
+    update_manual_shopping_item,
     delete_meal,
     get_all_recipes,
     get_week_start_date,
@@ -38,6 +45,8 @@ from validators import (
     validate_day,
     validate_meal_type,
     validate_week_start_date,
+    validate_ingredient_name,
+    validate_quantity,
     sanitize_string,
     validate_recipe_id,
     validate_style_hint,
@@ -70,6 +79,42 @@ def parse_week_start_date(week_start_str):
     except ValueError:
         # If parsing fails, return None to use default
         return None
+
+
+def clean_short_field(value, default, max_length):
+    """Normalize short manual item fields for DB column limits."""
+    cleaned = sanitize_string(str(value or "")).strip()
+    return (cleaned[:max_length] if cleaned else default)
+
+
+def parse_manual_item_data(data):
+    """Validate and normalize manual item form fields."""
+    if not data:
+        return None, 'Invalid request data'
+
+    is_valid, error_msg = validate_ingredient_name(data.get('name', ''))
+    if not is_valid:
+        return None, error_msg
+    quantity_raw = data.get('quantity')
+    if quantity_raw is None or str(quantity_raw).strip() == "":
+        quantity = 1
+    else:
+        is_valid, error_msg, quantity = validate_quantity(quantity_raw)
+        if not is_valid:
+            return None, error_msg
+    if quantity <= 0:
+        return None, 'Quantity must be greater than zero'
+
+    name = sanitize_string(data.get('name', ''))
+    if not name:
+        return None, 'Ingredient name is required'
+
+    return {
+        'name': name,
+        'quantity': quantity,
+        'unit': clean_short_field(data.get('unit'), 'unit', 20),
+        'category': clean_short_field(data.get('category'), 'other', 50),
+    }, None
 
 def is_date_in_past(target_date: date) -> bool:
     """Check if a date is in the past (before today)"""
@@ -843,12 +888,19 @@ def inventory():
         comparison = ingredient_manager.compare_required_vs_available(uid, week_start_date)
         required = ingredient_manager.get_required_ingredients_for_week(uid, week_start_date)
         available = ingredient_manager.get_available_ingredients(week_start_date)
+        required_ids = {item['ingredient_id'] for item in required.values()}
+        extra_available = {
+            ingredient_id: item
+            for ingredient_id, item in available.items()
+            if ingredient_id not in required_ids
+        }
         categorized = ingredient_manager.get_ingredients_by_category()
         
         return render_template('inventory.html',
                              comparison=comparison,
                              required=required,
                              available=available,
+                             extra_available=extra_available,
                              categorized=categorized,
                              week_start_date=week_start_date)
     finally:
@@ -885,6 +937,149 @@ def update_inventory_route():
     finally:
         db.close()
 
+
+@app.route('/add_inventory_item', methods=['POST'])
+@limiter.limit("60/minute")
+def add_inventory_item():
+    """Add a manually entered item to this week's inventory."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        def fail(message, status=400):
+            if request.is_json:
+                return jsonify({'success': False, 'message': message}), status
+            flash(message, 'error')
+            return redirect(url_for('inventory', week_start=week_start_date.isoformat()))
+
+        item_data, error_msg = parse_manual_item_data(data)
+        if error_msg:
+            return fail(error_msg)
+
+        ingredient = get_or_create_ingredient(
+            db,
+            item_data['name'],
+            item_data['category'],
+            item_data['unit'],
+        )
+        ingredient_manager = IngredientManager(db)
+        ingredient_manager.update_ingredient_availability(
+            ingredient_id=ingredient.id,
+            quantity=item_data['quantity'],
+            unit=item_data['unit'],
+            available=True,
+            week_start_date=week_start_date
+        )
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': 'Inventory item added successfully',
+                'ingredient_id': ingredient.id,
+            })
+        flash(f"{item_data['name']} added to inventory.", 'success')
+        return redirect(url_for('inventory', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
+
+@app.route('/update_inventory_item/<int:ingredient_id>', methods=['POST'])
+@limiter.limit("60/minute")
+def update_inventory_item(ingredient_id):
+    """Edit a manually tracked inventory item for this week."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        def fail(message, status=400):
+            if request.is_json:
+                return jsonify({'success': False, 'message': message}), status
+            flash(message, 'error')
+            return redirect(url_for('inventory', week_start=week_start_date.isoformat()))
+
+        current_ingredient = get_ingredient_by_id(db, ingredient_id)
+        if not current_ingredient:
+            return fail('Inventory item not found', 404)
+
+        item_data, error_msg = parse_manual_item_data(data)
+        if error_msg:
+            return fail(error_msg)
+
+        target_ingredient = get_or_create_ingredient(
+            db,
+            item_data['name'],
+            item_data['category'],
+            item_data['unit'],
+        )
+        if target_ingredient.id == current_ingredient.id:
+            update_ingredient_details(
+                db,
+                ingredient_id,
+                item_data['name'],
+                item_data['category'],
+                item_data['unit'],
+            )
+        else:
+            IngredientManager(db).update_ingredient_availability(
+                ingredient_id=ingredient_id,
+                quantity=0,
+                unit=data.get('previous_unit') or current_ingredient.default_unit or 'unit',
+                available=False,
+                week_start_date=week_start_date,
+            )
+
+        IngredientManager(db).update_ingredient_availability(
+            ingredient_id=target_ingredient.id,
+            quantity=item_data['quantity'],
+            unit=item_data['unit'],
+            available=True,
+            week_start_date=week_start_date,
+        )
+
+        if request.is_json:
+            return jsonify({'success': True, 'message': 'Inventory item updated successfully'})
+        flash(f"{item_data['name']} updated in inventory.", 'success')
+        return redirect(url_for('inventory', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
+
+@app.route('/delete_inventory_item/<int:ingredient_id>', methods=['POST'])
+@limiter.limit("60/minute")
+def delete_inventory_item(ingredient_id):
+    """Remove a manually tracked item from this week's inventory."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        unit = clean_short_field(data.get('unit') if data else None, 'unit', 20)
+        IngredientManager(db).update_ingredient_availability(
+            ingredient_id=ingredient_id,
+            quantity=0,
+            unit=unit,
+            available=False,
+            week_start_date=week_start_date,
+        )
+
+        if request.is_json:
+            return jsonify({'success': True, 'message': 'Inventory item removed successfully'})
+        flash('Inventory item removed.', 'success')
+        return redirect(url_for('inventory', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
 @app.route('/shopping_list')
 def shopping_list():
     """Generate and display shopping list"""
@@ -904,6 +1099,164 @@ def shopping_list():
                              shopping_list=shopping_list_data,
                              summary=summary,
                              week_start_date=week_start_date)
+    finally:
+        db.close()
+
+
+@app.route('/add_shopping_item', methods=['POST'])
+@limiter.limit("60/minute")
+def add_shopping_item():
+    """Add a manually entered item to this week's shopping list."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        def fail(message, status=400):
+            if request.is_json:
+                return jsonify({'success': False, 'message': message}), status
+            flash(message, 'error')
+            return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+
+        item_data, error_msg = parse_manual_item_data(data)
+        if error_msg:
+            return fail(error_msg)
+
+        item = add_manual_shopping_item(
+            db=db,
+            user_id=session["user_id"],
+            name=item_data['name'],
+            quantity=item_data['quantity'],
+            unit=item_data['unit'],
+            category=item_data['category'],
+            week_start_date=week_start_date,
+        )
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': 'Shopping list item added successfully',
+                'item_id': item.id,
+            })
+        flash(f"{item_data['name']} added to shopping list.", 'success')
+        return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
+
+@app.route('/update_manual_shopping_item/<int:item_id>', methods=['POST'])
+@limiter.limit("60/minute")
+def update_manual_shopping_item_route(item_id):
+    """Edit a user-created shopping-list item."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        def fail(message, status=400):
+            if request.is_json:
+                return jsonify({'success': False, 'message': message}), status
+            flash(message, 'error')
+            return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+
+        item = get_manual_shopping_item_for_user(db, item_id, session["user_id"])
+        if not item:
+            return fail('Shopping list item not found', 404)
+
+        item_data, error_msg = parse_manual_item_data(data)
+        if error_msg:
+            return fail(error_msg)
+
+        update_manual_shopping_item(
+            db,
+            item,
+            item_data['name'],
+            item_data['quantity'],
+            item_data['unit'],
+            item_data['category'],
+        )
+
+        if request.is_json:
+            return jsonify({'success': True, 'message': 'Shopping list item updated successfully'})
+        flash(f"{item_data['name']} updated in shopping list.", 'success')
+        return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
+
+@app.route('/delete_manual_shopping_item/<int:item_id>', methods=['POST'])
+@limiter.limit("60/minute")
+def delete_manual_shopping_item_route(item_id):
+    """Delete a user-created shopping-list item."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        item = get_manual_shopping_item_for_user(db, item_id, session["user_id"])
+        if not item:
+            if request.is_json:
+                return jsonify({'success': False, 'message': 'Shopping list item not found'}), 404
+            flash('Shopping list item not found', 'error')
+            return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+
+        delete_manual_shopping_item(db, item)
+
+        if request.is_json:
+            return jsonify({'success': True, 'message': 'Shopping list item deleted successfully'})
+        flash('Shopping list item deleted.', 'success')
+        return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+    finally:
+        db.close()
+
+
+@app.route('/shopping_item_to_inventory/<int:item_id>', methods=['POST'])
+@limiter.limit("60/minute")
+def shopping_item_to_inventory(item_id):
+    """Move a user-created shopping-list item into this week's inventory."""
+    db = SessionLocal()
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        week_start = data.get('week_start') if data else None
+        week_start_date = parse_week_start_date(week_start) if week_start else None
+        if not week_start_date:
+            week_start_date = get_week_start_date()
+
+        item = get_manual_shopping_item_for_user(db, item_id, session["user_id"])
+        if not item:
+            if request.is_json:
+                return jsonify({'success': False, 'message': 'Shopping list item not found'}), 404
+            flash('Shopping list item not found', 'error')
+            return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
+
+        ingredient = get_or_create_ingredient(db, item.name, item.category, item.unit)
+        IngredientManager(db).update_ingredient_availability(
+            ingredient_id=ingredient.id,
+            quantity=item.quantity,
+            unit=item.unit,
+            available=True,
+            week_start_date=week_start_date,
+        )
+        moved_name = item.name
+        delete_manual_shopping_item(db, item)
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': 'Shopping item moved to inventory successfully',
+                'ingredient_id': ingredient.id,
+            })
+        flash(f'{moved_name} moved to inventory.', 'success')
+        return redirect(url_for('shopping_list', week_start=week_start_date.isoformat()))
     finally:
         db.close()
 

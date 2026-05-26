@@ -68,7 +68,8 @@ class IngredientManager:
                     'ingredient_id': inv.ingredient_id,
                     'quantity': inv.quantity,
                     'unit': inv.unit,
-                    'name': inv.ingredient.name
+                    'name': inv.ingredient.name,
+                    'category': inv.ingredient.category
                 }
         
         return available

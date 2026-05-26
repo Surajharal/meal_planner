@@ -151,6 +151,26 @@ class Inventory(Base):
     
     ingredient = relationship("Ingredient", back_populates="inventory")
 
+
+class ManualShoppingItem(Base):
+    __tablename__ = 'manual_shopping_items'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(100), nullable=False)
+    quantity = Column(Float, default=1.0)
+    unit = Column(String(20), nullable=False)
+    category = Column(String(50), nullable=False, default="other")
+    week_start_date = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", backref="manual_shopping_items")
+
 # Database setup
 database_url = Config.get_database_url()
 engine = create_engine(database_url, echo=False)

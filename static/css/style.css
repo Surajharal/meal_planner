@@ -1106,6 +1106,116 @@ body {
     font-size: 1.1rem;
 }
 
+.manual-item-panel {
+    background: white;
+    border: 1px solid rgba(102, 126, 234, 0.14);
+    border-radius: 14px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+}
+
+.manual-item-panel[open] {
+    padding-bottom: 1.25rem;
+}
+
+.manual-item-toggle,
+.manual-item-summary {
+    cursor: pointer;
+}
+
+.manual-item-toggle {
+    display: inline-flex;
+}
+
+.manual-item-summary {
+    color: #667eea;
+    font-weight: 700;
+    list-style: none;
+}
+
+.manual-item-summary::-webkit-details-marker,
+.manual-item-toggle::-webkit-details-marker {
+    display: none;
+}
+
+.manual-item-form {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(160px, 1.5fr) auto;
+    gap: 1rem;
+    align-items: end;
+    margin-top: 1rem;
+}
+
+.manual-item-field label {
+    display: block;
+    color: #333;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.manual-item-field input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font: inherit;
+}
+
+.manual-item-field input:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+
+.manual-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.manual-item-edit {
+    width: 100%;
+}
+
+.manual-item-edit summary {
+    width: fit-content;
+    cursor: pointer;
+    list-style: none;
+}
+
+.manual-item-edit summary::-webkit-details-marker {
+    display: none;
+}
+
+.manual-item-edit-form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(100px, 1fr)) auto;
+    gap: 0.75rem;
+    align-items: end;
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(102, 126, 234, 0.06);
+    border-radius: 10px;
+}
+
+.manual-item-edit-form label {
+    color: #333;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.manual-item-edit-form input {
+    display: block;
+    width: 100%;
+    margin-top: 0.25rem;
+    padding: 0.55rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+}
+
 /* Shopping List */
 .shopping-summary {
     margin-bottom: 2rem;
@@ -1839,6 +1949,14 @@ body {
     .summary-stats {
         grid-template-columns: repeat(2, 1fr);
         gap: 0.75rem;
+    }
+
+    .manual-item-form {
+        grid-template-columns: 1fr;
+    }
+
+    .manual-item-edit-form {
+        grid-template-columns: 1fr;
     }
 
     .stat-value {
